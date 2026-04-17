@@ -1,17 +1,32 @@
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
+from enum import Enum # <-- Añadir esta importación
 
-# Shared properties
+# --- Enums para mapear la BD ---
+class EstadoArticulo(str, Enum):
+    disponible = "disponible"
+    reservado = "reservado"
+    vendido = "vendido"
+    oculto = "oculto"
+
+# --- Artículos Schemas ---
 class ArticuloBase(BaseModel):
     titulo: str
     descripcion: Optional[str] = None
     precio_base: float
 
-# Properties to receive on item creation
-# Properties to receive on item creation
 class ArticuloCreate(ArticuloBase):
-    pass # We just use 'pass' because it already inherits titulo, descripcion, and precio_base from ArticuloBase!
+    pass 
+
+class ArticuloResponse(ArticuloBase):
+    id_articulo: str
+    id_vendedor: str
+    estado_articulo: EstadoArticulo # <-- Usamos el Enum aquí
+    created_at: datetime
+    updated_at: datetime
+
+# (El resto de esquemas de Auth y Ofertas se quedan igual)
 
 # Properties to return to the frontend
 class ArticuloResponse(ArticuloBase):

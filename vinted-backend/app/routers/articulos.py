@@ -38,8 +38,7 @@ def list_articulos(db: Client = Depends(get_supabase)):
     Fetches all available items.
     """
     try:
-        # Fetch items where estado_articulo is 'DISPONIBLE'
-        response = db.table("articulos").select("*").eq("estado_articulo", "DISPONIBLE").execute()
+        response = db.table("articulos").select("*").eq("estado_articulo", "disponible").execute()
         return response.data
     
     except Exception as e:

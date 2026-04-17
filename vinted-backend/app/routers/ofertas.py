@@ -23,9 +23,10 @@ def crear_oferta(
             
         articulo = articulo_res.data[0]
         
-        if articulo["estado_articulo"] != "DISPONIBLE":
+        # Cambiamos "DISPONIBLE" por "disponible"
+        if articulo["estado_articulo"] != "disponible":
             raise HTTPException(status_code=400, detail="This item is no longer available")
-            
+             
         if articulo["id_vendedor"] == user_id:
             raise HTTPException(status_code=400, detail="You cannot make an offer on your own item")
 
@@ -75,9 +76,19 @@ def hacer_contraoferta(
         if not (is_buyer or is_seller):
             raise HTTPException(status_code=403, detail="You are not part of this negotiation")
             
+# 2. Check if it's valid to accept
         if oferta["estado"] not in ["PENDIENTE", "CONTRAOFERTA"]:
-            raise HTTPException(status_code=400, detail="Cannot counter an offer that is already closed")
+            raise HTTPException(status_code=400, detail="Offer cannot be accepted in its current state")
+            
+        # Cambiamos "DISPONIBLE" por "disponible"
+        if oferta["articulos"]["estado_articulo"] != "disponible":
+            raise HTTPException(status_code=400, detail="Item is no longer available")
 
+        # 3. Reserve the Item FIRST
+        db.table("articulos").update({
+            "estado_articulo": "reservado" # <-- Cambiamos "RESERVADO" por "reservado"
+        }).eq("id_articulo", oferta["id_articulo"]).execute()
+        
         # Prepare the update payload
         update_data = {
             "importe": contra.nuevo_importe,
