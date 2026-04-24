@@ -1,64 +1,98 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
-from enum import Enum # <-- Añadir esta importación
+from enum import Enum
 
-# --- Enums para mapear la BD ---
+# --- Enums ---
 class EstadoArticulo(str, Enum):
     disponible = "disponible"
     reservado = "reservado"
     vendido = "vendido"
-    oculto = "oculto"
+    eliminado = "eliminado"
+    error = "error"
 
 # --- Artículos Schemas ---
 class ArticuloBase(BaseModel):
     titulo: str
     descripcion: Optional[str] = None
     precio_base: float
+    categoria: str
 
 class ArticuloCreate(ArticuloBase):
-    pass 
+    estado_articulo: EstadoArticulo = EstadoArticulo.disponible
+
+class ArticuloUpdate(BaseModel):
+    titulo: Optional[str] = None
+    descripcion: Optional[str] = None
+    precio_base: Optional[float] = None
+    categoria: Optional[str] = None
+    estado_articulo: Optional[EstadoArticulo] = None
+
+class FotoResponse(BaseModel):
+    id_foto: int
+    image_url: str
+    created_at: datetime
 
 class ArticuloResponse(ArticuloBase):
-    id_articulo: str
-    id_vendedor: str
-    estado_articulo: EstadoArticulo # <-- Usamos el Enum aquí
+    id_articulo: int
+    id_vendedor: str # UUID
+    estado_articulo: EstadoArticulo
+    fotos: List[FotoResponse] = []
     created_at: datetime
     updated_at: datetime
 
-# (El resto de esquemas de Auth y Ofertas se quedan igual)
-
-# Properties to return to the frontend
-class ArticuloResponse(ArticuloBase):
-    id_articulo: str
-    estado_articulo: str
-    created_at: datetime
-    updated_at: datetime
-
-# Add these to your schemas.py
+# --- Auth / User Schemas ---
 class UsuarioCreate(BaseModel):
     email: str
     password: str
+
+class UsuarioResponse(BaseModel):
+    id_usuario: str # UUID
+    email: str
+    estado: str
+    created_at: datetime
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
+# --- Ofertas Schemas ---
 class OfertaCreate(BaseModel):
-    id_articulo: str
+    id_articulo: int
     importe: float
-    mensaje: Optional[str] = None # <-- Optional message field
+    mensaje: Optional[str] = None
 
 class OfertaContra(BaseModel):
     nuevo_importe: float
-    mensaje: Optional[str] = None # <-- Optional message field
+    mensaje: Optional[str] = None
 
 class OfertaResponse(BaseModel):
-    id_oferta: str
+    id_oferta: int
     estado: str
     importe: float
-    mensaje: Optional[str] = None # <-- Include in the response
-    id_comprador: str
-    id_articulo: str
+    mensaje: Optional[str] = None
+    id_comprador: str # UUID
+    id_articulo: int
     created_at: datetime
     updated_at: datetime
+
+# --- Mensajería Schemas ---
+class ConversacionResponse(BaseModel):
+    id_conversacion: int
+    id_usuario_1: str
+    id_usuario_2: str
+    id_articulo: int
+    created_at: datetime
+
+class MensajeCreate(BaseModel):
+    id_destinatario: str
+    id_articulo: int
+    contenido: str
+
+class MensajeResponse(BaseModel):
+    id_mensaje: int
+    id_conversacion: int
+    id_emisor: str
+    contenido: str
+    leido: bool
+    created_at: datetime

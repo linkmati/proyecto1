@@ -20,8 +20,7 @@ def register_user(user: UsuarioCreate, db: Client = Depends(get_supabase)):
         db.table("usuarios").insert({
             "id_usuario": user_id,
             "email": user.email,
-            "estado": "ACTIVO"
-            # Notice we skip 'contrasena' to let Supabase handle security!
+            "estado": "activo"
         }).execute()
         
         return {"message": "User registered successfully", "id_usuario": user_id}

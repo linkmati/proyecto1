@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from supabase import Client
 from app.db.supabase import get_supabase
-from app.routers import articulos, auth, ofertas
+from app.routers import articulos, auth, ofertas, users, mensajes
 
 
 
@@ -9,8 +9,10 @@ app = FastAPI(title="Vinted Clone API")
 
 # Connect the router to the app
 app.include_router(auth.router)
+app.include_router(users.router)
 app.include_router(articulos.router)
 app.include_router(ofertas.router)
+app.include_router(mensajes.router)
 
 @app.get("/")
 def read_root():

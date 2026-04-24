@@ -6,15 +6,44 @@ from app.models.schemas import OfertaCreate, OfertaResponse, OfertaContra
 
 router = APIRouter(prefix="/api/ofertas", tags=["Ofertas"])
 
+@router.get("/", response_model=list[OfertaResponse])
+def listar_mis_ofertas(
+    db: Client = Depends(get_supabase),
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Lists offers where the user is either the buyer or the seller.
+    """
+    try:
+        # Fetch offers where user is buyer OR seller (seller requires join)
+        # We can use a query with OR and join if Supabase supports it well,
+        # or do two queries and merge.
+        
+        # Simple approach: Fetch all offers where buyer is user_id
+        buyer_offers = db.table("ofertas").select("*").eq("id_comprador", user_id).execute()
+        
+        # Fetch articles by user_id to find offers on them
+        my_articles = db.table("articulos").select("id_articulo").eq("id_vendedor", user_id).execute()
+        my_art_ids = [a["id_articulo"] for a in my_articles.data]
+        
+        seller_offers = []
+        if my_art_ids:
+            seller_offers_res = db.table("ofertas").select("*").in_("id_articulo", my_art_ids).execute()
+            seller_offers = seller_offers_res.data
+
+        # Merge and remove duplicates (by id_oferta)
+        all_offers_map = {o["id_oferta"]: o for o in buyer_offers.data + seller_offers}
+        return list(all_offers_map.values())
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.post("/", response_model=OfertaResponse)
 def crear_oferta(
     oferta: OfertaCreate, 
     db: Client = Depends(get_supabase),
     user_id: str = Depends(get_current_user)
 ):
-    """
-    Creates a new offer for an available item, with an optional message.
-    """
     try:
         articulo_res = db.table("articulos").select("estado_articulo, id_vendedor").eq("id_articulo", oferta.id_articulo).execute()
         
@@ -23,19 +52,17 @@ def crear_oferta(
             
         articulo = articulo_res.data[0]
         
-        # Cambiamos "DISPONIBLE" por "disponible"
         if articulo["estado_articulo"] != "disponible":
             raise HTTPException(status_code=400, detail="This item is no longer available")
              
         if articulo["id_vendedor"] == user_id:
             raise HTTPException(status_code=400, detail="You cannot make an offer on your own item")
 
-        # Include the message in the database payload
         oferta_data = {
             "importe": oferta.importe,
             "id_articulo": oferta.id_articulo,
             "id_comprador": user_id,
-            "estado": "PENDIENTE",
+            "estado": "pendiente",
             "mensaje": oferta.mensaje 
         }
         
@@ -46,24 +73,19 @@ def crear_oferta(
             
         return response.data[0]
         
-    except HTTPException as he:
-        raise he 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.patch("/{id_oferta}/contraoferta", response_model=OfertaResponse)
 def hacer_contraoferta(
-    id_oferta: str,
+    id_oferta: int,
     contra: OfertaContra,
     db: Client = Depends(get_supabase),
     user_id: str = Depends(get_current_user)
 ):
-    """
-    Allows the buyer or seller to propose a new price and attach a new message.
-    """
     try:
-        oferta_res = db.table("ofertas").select("*, articulos(id_vendedor)").eq("id_oferta", id_oferta).execute()
+        oferta_res = db.table("ofertas").select("*, articulos(id_vendedor, estado_articulo)").eq("id_oferta", id_oferta).execute()
         
         if not oferta_res.data:
             raise HTTPException(status_code=404, detail="Offer not found")
@@ -74,36 +96,72 @@ def hacer_contraoferta(
         is_seller = oferta["articulos"]["id_vendedor"] == user_id
         
         if not (is_buyer or is_seller):
-            raise HTTPException(status_code=403, detail="You are not part of this negotiation")
+            raise HTTPException(status_code=403, detail="Unauthorized")
             
-# 2. Check if it's valid to accept
-        if oferta["estado"] not in ["PENDIENTE", "CONTRAOFERTA"]:
-            raise HTTPException(status_code=400, detail="Offer cannot be accepted in its current state")
+        if oferta["estado"] not in ["pendiente"]:
+            raise HTTPException(status_code=400, detail="Negotiation is closed")
             
-        # Cambiamos "DISPONIBLE" por "disponible"
         if oferta["articulos"]["estado_articulo"] != "disponible":
             raise HTTPException(status_code=400, detail="Item is no longer available")
 
-        # 3. Reserve the Item FIRST
-        db.table("articulos").update({
-            "estado_articulo": "reservado" # <-- Cambiamos "RESERVADO" por "reservado"
-        }).eq("id_articulo", oferta["id_articulo"]).execute()
-        
-        # Prepare the update payload
         update_data = {
             "importe": contra.nuevo_importe,
-            "estado": "CONTRAOFERTA"
+            "mensaje": contra.mensaje if contra.mensaje else oferta["mensaje"]
         }
-        
-        # If the user sends a new message, overwrite the old one
-        if contra.mensaje is not None:
-            update_data["mensaje"] = contra.mensaje
 
         update_res = db.table("ofertas").update(update_data).eq("id_oferta", id_oferta).execute()
-        
         return update_res.data[0]
 
-    except HTTPException as he:
-        raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{id_oferta}/aceptar", response_model=OfertaResponse)
+def aceptar_oferta(
+    id_oferta: int,
+    db: Client = Depends(get_supabase),
+    user_id: str = Depends(get_current_user)
+):
+    try:
+        oferta_res = db.table("ofertas").select("*, articulos(id_vendedor, estado_articulo, id_articulo)").eq("id_oferta", id_oferta).execute()
+        if not oferta_res.data:
+            raise HTTPException(status_code=404, detail="Offer not found")
+            
+        oferta = oferta_res.data[0]
+        if oferta["articulos"]["id_vendedor"] != user_id:
+            raise HTTPException(status_code=403, detail="Only seller can accept")
+            
+        if oferta["estado"] != "pendiente":
+            raise HTTPException(status_code=400, detail="Offer cannot be accepted")
+
+        if oferta["articulos"]["estado_articulo"] != "disponible":
+            raise HTTPException(status_code=400, detail="Item not available")
+
+        # Update Article to 'vendido'
+        db.table("articulos").update({"estado_articulo": "vendido"}).eq("id_articulo", oferta["id_articulo"]).execute()
+        
+        # Update Offer to 'aceptada'
+        update_res = db.table("ofertas").update({"estado": "aceptada"}).eq("id_oferta", id_oferta).execute()
+        
+        return update_res.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/{id_oferta}/rechazar", response_model=OfertaResponse)
+def rechazar_oferta(
+    id_oferta: int,
+    db: Client = Depends(get_supabase),
+    user_id: str = Depends(get_current_user)
+):
+    try:
+        oferta_res = db.table("ofertas").select("*, articulos(id_vendedor)").eq("id_oferta", id_oferta).execute()
+        if not oferta_res.data:
+            raise HTTPException(status_code=404, detail="Offer not found")
+            
+        oferta = oferta_res.data[0]
+        if user_id not in [oferta["id_comprador"], oferta["articulos"]["id_vendedor"]]:
+            raise HTTPException(status_code=403, detail="Unauthorized")
+
+        update_res = db.table("ofertas").update({"estado": "rechazada"}).eq("id_oferta", id_oferta).execute()
+        return update_res.data[0]
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
