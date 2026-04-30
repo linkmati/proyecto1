@@ -8,8 +8,8 @@ class EstadoArticulo(str, Enum):
     disponible = "disponible"
     reservado = "reservado"
     vendido = "vendido"
-    eliminado = "eliminado"
-    error = "error"
+    desactivado = "desactivado" # Antes 'eliminado'
+    eliminado = "eliminado"      # Antes 'error'
 
 # --- Artículos Schemas ---
 class ArticuloBase(BaseModel):
@@ -95,4 +95,20 @@ class MensajeResponse(BaseModel):
     id_emisor: str
     contenido: str
     leido: bool
+    created_at: datetime
+
+# --- Favoritos Schemas ---
+class FavoritoResponse(BaseModel):
+    id_favorito: int
+    id_usuario: str
+    id_articulo: int
+    created_at: datetime
+
+# --- Pedidos Schemas ---
+class PedidoResponse(BaseModel):
+    id_pedido: int
+    id_comprador: str
+    id_articulo: int
+    estado_pedido: str
+    precio_final: float
     created_at: datetime

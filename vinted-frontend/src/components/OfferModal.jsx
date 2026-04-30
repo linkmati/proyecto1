@@ -10,6 +10,8 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
 
   if (!article) return null
 
+  const isContraoferta = !!article.id_oferta
+
   const submitOffer = async (e) => {
     e.preventDefault()
 
@@ -20,15 +22,27 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
 
     try {
       setLoading(true)
-      const response = await api.post('/api/ofertas', {
-        id_articulo: article.id_articulo,
-        importe: Number(importe),
-        mensaje,
-      })
-      onSuccess(`Oferta enviada correctamente. ID de oferta: ${response.data.id_oferta}`)
+      
+      if (isContraoferta) {
+        // Lógica de Contraoferta
+        await api.patch(`/api/ofertas/${article.id_oferta}/contraoferta`, {
+          nuevo_importe: Number(importe),
+          mensaje,
+        })
+        onSuccess(`Contraoferta enviada correctamente.`)
+      } else {
+        // Lógica de Nueva Oferta
+        const response = await api.post('/api/ofertas', {
+          id_articulo: article.id_articulo,
+          importe: Number(importe),
+          mensaje,
+        })
+        onSuccess(`Oferta enviada correctamente.`)
+      }
+      
       onClose()
     } catch (error) {
-      onError(error.response?.data?.detail || 'No se pudo enviar la oferta.')
+      onError(error.response?.data?.detail || 'No se pudo procesar la oferta.')
     } finally {
       setLoading(false)
     }
@@ -39,7 +53,7 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal__header">
           <div>
-            <span className="badge">Nueva oferta</span>
+            <span className="badge">{isContraoferta ? 'Contraoferta' : 'Nueva oferta'}</span>
             <h2>{article.titulo}</h2>
           </div>
           <button className="icon-button" onClick={onClose}>✕</button>
@@ -47,7 +61,7 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
 
         <form className="form" onSubmit={submitOffer}>
           <label>
-            Importe ofertado
+            Importe {isContraoferta ? 'de la contraoferta' : 'ofertado'}
             <input
               type="number"
               min="0"
@@ -69,7 +83,7 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
           </label>
 
           <button className="button button--primary button--full" disabled={loading}>
-            {loading ? 'Enviando oferta...' : 'Confirmar oferta'}
+            {loading ? 'Enviando...' : (isContraoferta ? 'Enviar contraoferta' : 'Confirmar oferta')}
           </button>
         </form>
       </div>

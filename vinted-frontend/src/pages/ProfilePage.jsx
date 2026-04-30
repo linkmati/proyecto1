@@ -1,29 +1,30 @@
 import { useEffect, useState } from 'react'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import ArticleCard from '../components/ArticleCard'
 import Toast from '../components/Toast'
 
 export default function ProfilePage() {
-  const { userEmail } = useAuth()
-  const [profile, setProfile] = useState(null)
-  const [articles, setArticles] = useState([])
-  const [offers, setOffers] = useState([])
+  const { userEmail, isAuthenticated } = useAuth()
+  const [activeTab, setActiveTab] = useState('publicados')
+  const [data, setData] = useState([])
   const [loading, setLoading] = useState(true)
   const [toast, setToast] = useState({ message: '', tone: 'success' })
 
   const loadData = async () => {
+    if (!isAuthenticated) return
     try {
       setLoading(true)
-      const [pRes, aRes, oRes] = await Promise.all([
-        api.get('/api/users/me'),
-        api.get('/api/users/me/articulos'),
-        api.get('/api/ofertas')
-      ])
-      setProfile(pRes.data)
-      setArticles(aRes.data)
-      setOffers(oRes.data)
+      let endpoint = ''
+      if (activeTab === 'publicados') endpoint = '/api/users/me/articulos'
+      if (activeTab === 'compras') endpoint = '/api/users/me/compras'
+      if (activeTab === 'favoritos') endpoint = '/api/favoritos'
+
+      const res = await api.get(endpoint).catch(() => ({ data: [] }))
+      setData(Array.isArray(res.data) ? res.data : [])
     } catch (error) {
-      setToast({ message: 'Error cargando datos del perfil.', tone: 'error' })
+      setToast({ message: 'Error cargando datos.', tone: 'error' })
+      setData([])
     } finally {
       setLoading(false)
     }
@@ -31,71 +32,115 @@ export default function ProfilePage() {
 
   useEffect(() => {
     loadData()
-  }, [])
+  }, [activeTab, isAuthenticated])
 
-  const handleOfferAction = async (id, action) => {
+  const handleUpdateArticle = async (id, currentPrice) => {
+    const newPrice = prompt('Nuevo precio:', currentPrice)
+    if (newPrice === null || newPrice === '') return
+    
     try {
-      await api.post(`/api/ofertas/${id}/${action}`)
-      setToast({ message: `Oferta ${action === 'aceptar' ? 'aceptada' : 'rechazada'} correctamente.`, tone: 'success' })
+      await api.patch(`/api/articulos/${id}`, { precio_base: Number(newPrice) })
+      setToast({ message: 'Precio actualizado.', tone: 'success' })
       loadData()
     } catch (error) {
-      setToast({ message: `Error al ${action} la oferta.`, tone: 'error' })
+      setToast({ message: 'Error al actualizar precio.', tone: 'error' })
     }
   }
 
-  if (loading) return <div className="container page-section">Cargando...</div>
+  const handleSetStatus = async (id, newStatus, msg) => {
+    if (!confirm(msg)) return
+    try {
+      await api.patch(`/api/articulos/${id}`, { estado_articulo: newStatus })
+      setToast({ message: 'Estado actualizado.', tone: 'success' })
+      loadData()
+    } catch (error) {
+      setToast({ message: 'Error al actualizar estado.', tone: 'error' })
+    }
+  }
+
+  if (!isAuthenticated) {
+    return <div className="container page-section">Debes iniciar sesión para ver tu perfil.</div>
+  }
 
   return (
     <div className="container page-section">
-      <div className="spotlight-card card" style={{ marginBottom: '24px' }}>
-        <span className="eyebrow">Mi Perfil</span>
-        <h1>Hola, {profile?.email}</h1>
-        <p>Estado de cuenta: <strong>{profile?.estado}</strong></p>
-      </div>
-
-      <div className="publish-layout">
-        <div>
-          <h2>Mis Artículos</h2>
-          {articles.length === 0 ? (
-            <div className="empty-state">No has publicado nada todavía.</div>
-          ) : (
-            <div className="meta-grid" style={{ gap: '16px' }}>
-              {articles.map(art => (
-                <div key={art.id_articulo} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <strong>{art.titulo}</strong>
-                    <small>{art.estado_articulo} - €{art.precio_base}</small>
-                  </div>
-                  <span className="badge">{art.categoria}</span>
-                </div>
-              ))}
-            </div>
-          )}
+      <div className="card" style={{ marginBottom: '32px', display: 'flex', alignItems: 'center', gap: '24px' }}>
+        <div className="brand__logo" style={{ width: '80px', height: '80px', fontSize: '2rem' }}>
+          {userEmail?.[0]?.toUpperCase() || 'U'}
         </div>
-
         <div>
-          <h2>Gestión de Ofertas</h2>
-          {offers.filter(o => o.estado === 'pendiente').length === 0 ? (
-            <div className="empty-state">No tienes ofertas pendientes.</div>
-          ) : (
-            <div className="meta-grid" style={{ gap: '16px' }}>
-              {offers.filter(o => o.estado === 'pendiente').map(off => (
-                <div key={off.id_oferta} className="card">
-                  <div style={{ marginBottom: '12px' }}>
-                    <strong>Oferta de €{off.importe}</strong>
-                    <p style={{ margin: '4px 0', fontSize: '0.9rem' }}>{off.mensaje || 'Sin mensaje'}</p>
-                    <small>Artículo ID: {off.id_articulo}</small>
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <button className="button button--primary" onClick={() => handleOfferAction(off.id_oferta, 'aceptar')}>Aceptar</button>
-                    <button className="button button--secondary" onClick={() => handleOfferAction(off.id_oferta, 'rechazar')}>Rechazar</button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          <h1 style={{ margin: 0 }}>{userEmail}</h1>
+          <p className="eyebrow">Miembro desde hoy</p>
         </div>
       </div>
+
+      <div className="tabs">
+        <div className={`tab ${activeTab === 'publicados' ? 'tab--active' : ''}`} onClick={() => setActiveTab('publicados')}>
+          Mis Artículos
+        </div>
+        <div className={`tab ${activeTab === 'compras' ? 'tab--active' : ''}`} onClick={() => setActiveTab('compras')}>
+          Mis Compras
+        </div>
+        <div className={`tab ${activeTab === 'favoritos' ? 'tab--active' : ''}`} onClick={() => setActiveTab('favoritos')}>
+          Favoritos
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="empty-state">Cargando...</div>
+      ) : data.length === 0 ? (
+        <div className="empty-state">No hay nada que mostrar aquí todavía.</div>
+      ) : (
+        <div className="article-grid">
+          {activeTab === 'publicados' && data.filter(art => art.estado_articulo !== 'eliminado').map(art => (
+            <div key={art.id_articulo} className="card article-card">
+              <div className="article-card__content">
+                <div className="badges">
+                  <span className={`badge ${art.estado_articulo === 'desactivado' ? 'badge--danger' : ''}`}>
+                    {art.estado_articulo}
+                  </span>
+                  <span className="badge badge--category">{art.categoria}</span>
+                </div>
+                <h3>{art.titulo}</h3>
+                <div className="price">€ {Number(art.precio_base).toFixed(2)}</div>
+                
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '12px' }}>
+                  {art.estado_articulo === 'disponible' && (
+                    <>
+                      <button className="button button--secondary" onClick={() => handleUpdateArticle(art.id_articulo, art.precio_base)}>Precio</button>
+                      <button className="button button--ghost" style={{ color: 'var(--danger)' }} onClick={() => handleSetStatus(art.id_articulo, 'desactivado', '¿Desactivar artículo?')}>Desactivar</button>
+                    </>
+                  )}
+                  
+                  {art.estado_articulo === 'desactivado' && (
+                    <>
+                      <button className="button button--primary" onClick={() => handleSetStatus(art.id_articulo, 'disponible', '¿Recuperar artículo?')}>Recuperar</button>
+                      <button className="button button--ghost" onClick={() => handleSetStatus(art.id_articulo, 'eliminado', '¿Eliminar definitivamente de tu vista?')}>Eliminar</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+          
+          {activeTab === 'favoritos' && data.map(art => (
+            <ArticleCard 
+              key={art.id_articulo} 
+              article={art} 
+              isFavorite={true} 
+              onToggleFav={(id) => setData(prev => prev.filter(a => a.id_articulo !== id))}
+            />
+          ))}
+
+          {activeTab === 'compras' && data.map(ped => (
+            <div key={ped.id_pedido} className="card">
+              <strong>Pedido #{ped.id_pedido}</strong>
+              <p>Estado: {ped.estado_pedido}</p>
+              <p>Total: €{ped.precio_final}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <Toast message={toast.message} tone={toast.tone} onClose={() => setToast({ message: '', tone: 'success' })} />
     </div>

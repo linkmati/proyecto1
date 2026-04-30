@@ -1,75 +1,119 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
-import Hero from '../components/Hero'
+import { useAuth } from '../context/AuthContext'
 import ArticleCard from '../components/ArticleCard'
-import OfferModal from '../components/OfferModal'
 import Toast from '../components/Toast'
+import OfferModal from '../components/OfferModal'
 
 export default function HomePage() {
+  const { isAuthenticated } = useAuth()
   const [articles, setArticles] = useState([])
+  const [favorites, setFavorites] = useState([]) // List of article IDs (Strings)
   const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('Todas')
   const [loading, setLoading] = useState(true)
   const [selectedArticle, setSelectedArticle] = useState(null)
   const [toast, setToast] = useState({ message: '', tone: 'success' })
 
-  const loadArticles = async () => {
+  const CATEGORIAS = ['Todas', 'Moda', 'Hogar', 'Electrónica', 'Entretenimiento', 'Otros']
+
+  const loadData = async () => {
     try {
       setLoading(true)
-      const response = await api.get('/api/articulos')
-      setArticles(response.data)
+      const params = { limit: 20 }
+      if (category !== 'Todas') params.categoria = category
+      if (query.trim()) params.search = query.trim()
+      
+      const [artRes, favRes] = await Promise.all([
+        api.get('/api/articulos', { params }).catch(() => ({ data: [] })),
+        isAuthenticated ? api.get('/api/favoritos').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+      ])
+      
+      const fetchedArticles = Array.isArray(artRes.data) ? artRes.data : []
+      setArticles(fetchedArticles)
+
+      // CRÍTICO: Normalizar IDs a String para la comparación
+      const favIds = (Array.isArray(favRes.data) ? favRes.data : []).map(f => String(f.id_articulo))
+      setFavorites(favIds)
     } catch (error) {
-      setToast({
-        message: error.response?.data?.detail || 'No se pudieron cargar los artículos.',
-        tone: 'error',
-      })
+      console.error('Error general en loadData:', error)
+      setToast({ message: 'Error de conexión con el servidor.', tone: 'error' })
     } finally {
       setLoading(false)
     }
   }
 
+  // Debounce para la búsqueda por texto
   useEffect(() => {
-    loadArticles()
-  }, [])
+    const timer = setTimeout(() => {
+      loadData()
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [query, category, isAuthenticated])
 
-  const filteredArticles = useMemo(() => {
-    const text = query.toLowerCase()
-    return articles.filter((article) => {
-      return (
-        article.titulo?.toLowerCase().includes(text) ||
-        article.descripcion?.toLowerCase().includes(text)
-      )
-    })
-  }, [articles, query])
+  const onToggleFav = (id, isAdded) => {
+    const idStr = String(id)
+    if (isAdded) {
+      setFavorites(prev => [...prev, idStr])
+    } else {
+      setFavorites(prev => prev.filter(favId => favId !== idStr))
+    }
+  }
 
   return (
-    <>
-      <Hero />
-      <section className="container page-section">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">Catálogo activo</span>
-            <h2>Artículos disponibles</h2>
-          </div>
+    <div className="container page-section">
+      <div className="hero" style={{ padding: '40px 0', textAlign: 'center' }}>
+        <span className="eyebrow">Segunda mano con estilo</span>
+        <h1 style={{ fontSize: '3rem', margin: '16px 0' }}>Encuentra tesoros únicos</h1>
+        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
           <input
             className="search-input"
-            placeholder="Buscar por título o descripción"
+            style={{ maxWidth: '100%', padding: '16px 24px', fontSize: '1.1rem' }}
+            placeholder="¿Qué estás buscando?"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
+      </div>
 
-        {loading ? (
-          <div className="empty-state">Cargando artículos...</div>
-        ) : filteredArticles.length === 0 ? (
-          <div className="empty-state">No hay artículos que coincidan con tu búsqueda.</div>
-        ) : (
-          <div className="article-grid">
-            {filteredArticles.map((article) => (
-              <ArticleCard key={article.id_articulo} article={article} onOffer={setSelectedArticle} />
-            ))}
+      <div className="categories-bar">
+        {CATEGORIAS.map(cat => (
+          <div 
+            key={cat} 
+            className={`category-pill ${category === cat ? 'category-pill--active' : ''}`}
+            onClick={() => setCategory(cat)}
+          >
+            {cat}
           </div>
-        )}
-      </section>
+        ))}
+      </div>
+
+      <div className="section-heading">
+        <h2>{category === 'Todas' ? 'Últimas novedades' : `Novedades en ${category}`}</h2>
+      </div>
+
+      {loading ? (
+        <div className="empty-state">Buscando...</div>
+      ) : articles.length === 0 ? (
+        <div className="empty-state">No se han encontrado artículos.</div>
+      ) : (
+        <div className="article-grid">
+          {articles.map((article) => {
+            const artIdStr = String(article.id_articulo)
+            const isFav = favorites.includes(artIdStr)
+            
+            return (
+              <ArticleCard 
+                key={article.id_articulo} 
+                article={article} 
+                onOffer={setSelectedArticle} 
+                isFavorite={isFav}
+                onToggleFav={onToggleFav}
+              />
+            )
+          })}
+        </div>
+      )}
 
       <OfferModal
         article={selectedArticle}
@@ -83,6 +127,6 @@ export default function HomePage() {
         tone={toast.tone}
         onClose={() => setToast({ message: '', tone: 'success' })}
       />
-    </>
+    </div>
   )
 }

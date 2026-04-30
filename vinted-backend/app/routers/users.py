@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from supabase import Client
 from app.db.supabase import get_supabase
 from app.core.security import get_current_user
-from app.models.schemas import UsuarioResponse, ArticuloResponse
+from app.models.schemas import UsuarioResponse, ArticuloResponse, PedidoResponse
 
 router = APIRouter(prefix="/api/users", tags=["Users"])
 
@@ -34,6 +34,20 @@ def get_my_articulos(
     """
     try:
         response = db.table("articulos").select("*").eq("id_vendedor", user_id).execute()
+        return response.data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/me/compras", response_model=list[PedidoResponse])
+def get_my_compras(
+    db: Client = Depends(get_supabase),
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Returns all purchases made by the current user.
+    """
+    try:
+        response = db.table("pedidos").select("*").eq("id_comprador", user_id).execute()
         return response.data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

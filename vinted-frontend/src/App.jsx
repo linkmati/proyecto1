@@ -6,6 +6,7 @@ import PublishPage from './pages/PublishPage'
 import CounterOfferPage from './pages/CounterOfferPage'
 import ProfilePage from './pages/ProfilePage'
 import MessagesPage from './pages/MessagesPage'
+import ArticleDetailPage from './pages/ArticleDetailPage'
 
 export default function App() {
   return (
@@ -16,7 +17,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/publicar" element={<PublishPage />} />
-          <Route path="/negociar" element={<CounterOfferPage />} />
+          <Route path="/articulo/:id" element={<ArticleDetailPage />} />
           <Route path="/perfil" element={<ProfilePage />} />
           <Route path="/mensajes" element={<MessagesPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
