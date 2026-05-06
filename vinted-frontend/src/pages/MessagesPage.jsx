@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
@@ -8,20 +8,20 @@ import OfferModal from '../components/OfferModal'
 export default function MessagesPage() {
   const { userId } = useAuth()
   const [conversations, setConversations] = useState([])
-  const [selectedConv, setSelectedConv] = useState(null)
-  const [messages, setMessages] = useState([])
   const [offers, setOffers] = useState([])
+  const [messages, setMessages] = useState([])
+  const [selectedConv, setSelectedConv] = useState(null)
+  const [loading, setLoading] = useState(false)
   const [content, setContent] = useState('')
-  const [loading, setLoading] = useState(true)
-  const [selectedArticle, setSelectedArticle] = useState(null)
   const [toast, setToast] = useState({ message: '', tone: 'success' })
+  const [selectedArticle, setSelectedArticle] = useState(null)
 
   const loadConversations = async () => {
     try {
       setLoading(true)
       const [cRes, oRes] = await Promise.all([
-        api.get('/api/mensajes/conversaciones'),
-        api.get('/api/ofertas')
+        api.get('/api/messages/conversations'),
+        api.get('/api/offers')
       ])
       setConversations(cRes.data)
       setOffers(oRes.data)
@@ -34,15 +34,15 @@ export default function MessagesPage() {
 
   const loadMessages = async (id) => {
     try {
-      const res = await api.get(`/api/mensajes/conversaciones/${id}`)
+      const res = await api.get(`/api/messages/conversations/${id}/messages`)
       setMessages(res.data)
       setSelectedConv(id)
       
-      // Marcar como leído
-      await api.patch(`/api/mensajes/conversaciones/${id}/leer`)
+      // Mark as read
+      await api.patch(`/api/messages/conversations/${id}/read`)
       
       // Refresh list to clear notification badge locally
-      const cRes = await api.get('/api/mensajes/conversaciones')
+      const cRes = await api.get('/api/messages/conversations')
       setConversations(cRes.data)
     } catch (error) {
       console.error('Error cargando mensajes:', error)
@@ -57,14 +57,13 @@ export default function MessagesPage() {
     const recipientId = conv.id_usuario_1 === userId ? conv.id_usuario_2 : conv.id_usuario_1
 
     try {
-      await api.post('/api/mensajes/', {
+      await api.post('/api/messages/', {
         id_destinatario: recipientId,
         id_articulo: conv.id_articulo,
         contenido: content
       })
       setContent('')
       loadMessages(selectedConv)
-      // loadMessages already refreshes conversations list
     } catch (error) {
       setToast({ message: 'Error al enviar mensaje.', tone: 'error' })
     }
@@ -72,9 +71,9 @@ export default function MessagesPage() {
 
   const handleOfferAction = async (id, action) => {
     try {
-      await api.post(`/api/ofertas/${id}/${action}`)
+      await api.post(`/api/offers/${id}/${action}`)
       setToast({ message: `Oferta ${action} con éxito.`, tone: 'success' })
-      loadConversations() // refresh offers and re-sort list
+      loadConversations()
       if (selectedConv) loadMessages(selectedConv)
     } catch (error) {
       setToast({ message: 'Error en la oferta.', tone: 'error' })
@@ -107,7 +106,7 @@ export default function MessagesPage() {
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ fontWeight: 'bold', fontSize: '1rem', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {c.titulo_articulo}
+                  {c.item_title}
                 </div>
                 {c.unread_count > 0 && (
                   <div style={{ 
@@ -128,7 +127,7 @@ export default function MessagesPage() {
                 )}
               </div>
               <small style={{ display: 'block', color: 'var(--muted)', marginTop: '4px' }}>
-                Con: {c.nombre_otro}
+                Con: {c.other_user_name}
               </small>
             </div>
           ))}
@@ -142,17 +141,17 @@ export default function MessagesPage() {
             <div style={{ padding: '12px 24px', borderBottom: '1px solid var(--line)', background: 'var(--bg-soft)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                <div>
                 <Link to={`/articulo/${currentConv.id_articulo}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                  <strong>{currentConv.titulo_articulo} ↗</strong>
+                  <strong>{currentConv.item_title} ↗</strong>
                 </Link> 
                 <span style={{ color: 'var(--muted)', margin: '0 8px' }}>—</span> 
-                {currentConv.nombre_otro}
+                {currentConv.other_user_name}
                </div>
                <button 
                 className="button button--ghost" 
                 style={{ fontSize: '0.8rem', padding: '4px 12px' }}
                 onClick={() => setSelectedArticle({ 
                   id_articulo: currentConv.id_articulo, 
-                  titulo: currentConv.titulo_articulo,
+                  titulo: currentConv.item_title,
                   id_oferta: currentOffer?.id_oferta 
                 })}
                >
@@ -166,14 +165,14 @@ export default function MessagesPage() {
                   <span className="eyebrow" style={{ fontSize: '0.7rem' }}>Oferta pendiente</span>
                   <div style={{ fontWeight: 'bold' }}>
                     {currentOffer.ultimo_emisor_id === currentOffer.id_comprador 
-                      ? `${currentOffer.nombre_comprador} te ha hecho una oferta de €${currentOffer.importe}`
+                      ? `${currentOffer.buyer_name} te ha hecho una oferta de €${currentOffer.importe}`
                       : `El vendedor te ha hecho una contraoferta de €${currentOffer.importe}`
                     }
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button className="button button--primary" onClick={() => handleOfferAction(currentOffer.id_oferta, 'aceptar')}>Aceptar</button>
-                  <button className="button button--secondary" onClick={() => handleOfferAction(currentOffer.id_oferta, 'rechazar')}>Rechazar</button>
+                  <button className="button button--primary" onClick={() => handleOfferAction(currentOffer.id_oferta, 'accept')}>Aceptar</button>
+                  <button className="button button--secondary" onClick={() => handleOfferAction(currentOffer.id_oferta, 'reject')}>Rechazar</button>
                 </div>
               </div>
             )}

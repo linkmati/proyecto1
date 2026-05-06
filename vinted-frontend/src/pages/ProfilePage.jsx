@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import ArticleCard from '../components/ArticleCard'
@@ -8,7 +8,7 @@ export default function ProfilePage() {
   const { userEmail, isAuthenticated } = useAuth()
   const [activeTab, setActiveTab] = useState('publicados')
   const [data, setData] = useState([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState({ message: '', tone: 'success' })
 
   const loadData = async () => {
@@ -16,9 +16,9 @@ export default function ProfilePage() {
     try {
       setLoading(true)
       let endpoint = ''
-      if (activeTab === 'publicados') endpoint = '/api/users/me/articulos'
-      if (activeTab === 'compras') endpoint = '/api/users/me/compras'
-      if (activeTab === 'favoritos') endpoint = '/api/favoritos'
+      if (activeTab === 'publicados') endpoint = '/api/users/me/items'
+      if (activeTab === 'compras') endpoint = '/api/users/me/purchases'
+      if (activeTab === 'favoritos') endpoint = '/api/favorites'
 
       const res = await api.get(endpoint).catch(() => ({ data: [] }))
       setData(Array.isArray(res.data) ? res.data : [])
@@ -39,7 +39,7 @@ export default function ProfilePage() {
     if (newPrice === null || newPrice === '') return
     
     try {
-      await api.patch(`/api/articulos/${id}`, { precio_base: Number(newPrice) })
+      await api.patch(`/api/items/${id}`, { precio_base: Number(newPrice) })
       setToast({ message: 'Precio actualizado.', tone: 'success' })
       loadData()
     } catch (error) {
@@ -50,7 +50,7 @@ export default function ProfilePage() {
   const handleSetStatus = async (id, newStatus, msg) => {
     if (!confirm(msg)) return
     try {
-      await api.patch(`/api/articulos/${id}`, { estado_articulo: newStatus })
+      await api.patch(`/api/items/${id}`, { estado_articulo: newStatus })
       setToast({ message: 'Estado actualizado.', tone: 'success' })
       loadData()
     } catch (error) {

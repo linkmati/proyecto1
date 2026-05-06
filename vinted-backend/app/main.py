@@ -2,7 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from supabase import Client
 from app.db.supabase import get_supabase
-from app.routers import articulos, auth, ofertas, users, mensajes, favoritos
+from app.routers import items, auth, offers, users, messages, favorites
 
 app = FastAPI(title="Vinted Clone API")
 
@@ -16,13 +16,15 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Connect the router to the app
+# Connect the routers to the app
 app.include_router(auth.router)
 app.include_router(users.router)
-app.include_router(articulos.router)
-app.include_router(ofertas.router)
-app.include_router(mensajes.router)
-app.include_router(favoritos.router)
+app.include_router(items.router)
+app.include_router(offers.router)
+app.include_router(messages.router)
+app.include_router(favorites.router)
+
+
 
 @app.get("/")
 def read_root():

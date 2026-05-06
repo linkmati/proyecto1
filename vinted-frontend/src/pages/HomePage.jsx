@@ -25,8 +25,8 @@ export default function HomePage() {
       if (query.trim()) params.search = query.trim()
       
       const [artRes, favRes] = await Promise.all([
-        api.get('/api/articulos', { params }).catch(() => ({ data: [] })),
-        isAuthenticated ? api.get('/api/favoritos').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
+        api.get('/api/items', { params }).catch(() => ({ data: [] })),
+        isAuthenticated ? api.get('/api/favorites').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
       ])
       
       const fetchedArticles = Array.isArray(artRes.data) ? artRes.data : []

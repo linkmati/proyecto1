@@ -1,10 +1,8 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import api from '../api/client'
-import { useAuth } from '../context/AuthContext'
 
 export default function OfferModal({ article, onClose, onSuccess, onError }) {
-  const { isAuthenticated } = useAuth()
-  const [importe, setImporte] = useState(article?.precio_base || '')
+  const [importe, setImporte] = useState(article?.importe || '')
   const [mensaje, setMensaje] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -14,25 +12,21 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
 
   const submitOffer = async (e) => {
     e.preventDefault()
-
-    if (!isAuthenticated) {
-      onError('Debes iniciar sesión para enviar una oferta.')
-      return
-    }
+    if (!importe || loading) return
 
     try {
       setLoading(true)
       
       if (isContraoferta) {
-        // Lógica de Contraoferta
-        await api.patch(`/api/ofertas/${article.id_oferta}/contraoferta`, {
+        // Counter-offer logic
+        await api.patch(`/api/offers/${article.id_oferta}/counter-offer`, {
           nuevo_importe: Number(importe),
           mensaje,
         })
         onSuccess(`Contraoferta enviada correctamente.`)
       } else {
-        // Lógica de Nueva Oferta
-        const response = await api.post('/api/ofertas', {
+        // New offer logic
+        const response = await api.post('/api/offers', {
           id_articulo: article.id_articulo,
           importe: Number(importe),
           mensaje,

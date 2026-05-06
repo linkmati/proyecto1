@@ -1,38 +1,34 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
-import { useAuth } from '../context/AuthContext'
 import Toast from '../components/Toast'
 
+const CATEGORIAS = ['Moda', 'Hogar', 'Electrónica', 'Entretenimiento', 'Otros']
+
 export default function PublishPage() {
-  const { isAuthenticated } = useAuth()
-  const [form, setForm] = useState({ titulo: '', descripcion: '', precio_base: '', categoria: 'Moda' })
-  const [files, setFiles] = useState([])
+  const navigate = useNavigate()
   const [loading, setLoading] = useState(false)
+  const [form, setForm] = useState({
+    titulo: '',
+    descripcion: '',
+    precio_base: '',
+    categoria: 'Moda',
+  })
+  const [files, setFiles] = useState([])
   const [toast, setToast] = useState({ message: '', tone: 'success' })
 
-  const CATEGORIAS = ['Moda', 'Hogar', 'Electrónica', 'Entretenimiento', 'Otros']
-
-  const onChange = (e) => {
-    setForm((current) => ({ ...current, [e.target.name]: e.target.value }))
-  }
-
-  const onFileChange = (e) => {
-    setFiles(Array.from(e.target.files))
-  }
+  const onChange = (e) => setForm({ ...form, [e.target.name]: e.target.value })
+  const onFileChange = (e) => setFiles(Array.from(e.target.files))
 
   const onSubmit = async (e) => {
     e.preventDefault()
-
-    if (!isAuthenticated) {
-      setToast({ message: 'Debes iniciar sesión antes de publicar.', tone: 'error' })
-      return
-    }
+    if (loading) return
 
     try {
       setLoading(true)
       
-      // 1. Create Article
-      const response = await api.post('/api/articulos', {
+      // 1. Create Article (Item)
+      const response = await api.post('/api/items', {
         ...form,
         precio_base: Number(form.precio_base),
       })
@@ -44,7 +40,7 @@ export default function PublishPage() {
         for (const file of files) {
           const formData = new FormData()
           formData.append('file', file)
-          await api.post(`/api/articulos/${idArticulo}/imagenes`, formData, {
+          await api.post(`/api/items/${idArticulo}/images`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           })
         }
@@ -72,7 +68,7 @@ export default function PublishPage() {
         <span className="eyebrow">Nuevo artículo</span>
         <h1>Publica algo que valga la pena vender</h1>
         <p>
-          Conectado a <code>/api/articulos</code> y <code>/api/articulos/id/imagenes</code>.
+          Conectado a <code>/api/items</code> y <code>/api/items/id/images</code>.
           ¡Ahora con categorías y fotos!
         </p>
       </div>

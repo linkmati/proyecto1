@@ -12,7 +12,7 @@ export default function Header() {
 
     const fetchUnread = async () => {
       try {
-        const res = await api.get('/api/mensajes/no-leidos/conteo')
+        const res = await api.get('/api/messages/unread-count')
         setUnreadCount(res.data.count || 0)
       } catch (err) {
         console.error('Error fetching unread count:', err)

@@ -1,49 +1,38 @@
-import { useState, useEffect } from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 
-export default function ArticleCard({ article, onOffer, isFavorite, onToggleFav }) {
-  const { isAuthenticated } = useAuth()
+export default function ArticleCard({ article, isFavorite = false, onToggleFav, onOffer }) {
   const navigate = useNavigate()
-  const mainImage = article.fotos?.[0]?.image_url
-
-  // Usamos un estado local para que el cambio visual sea INSTANTÁNEO
+  const { isAuthenticated } = useAuth()
   const [localFav, setLocalFav] = useState(isFavorite)
 
-  // Sincronizar el estado local cuando cambie la prop
-  useEffect(() => {
-    setLocalFav(isFavorite)
-  }, [isFavorite])
+  const mainImage = article.fotos?.[0]?.image_url
 
   const handleToggleFav = async (e) => {
-    e.preventDefault()
     e.stopPropagation()
-    
-    if (!isAuthenticated) {
-      navigate('/auth')
-      return
-    }
-    
-    const targetId = article.id_articulo
+    if (!isAuthenticated) return navigate('/auth')
+
     const wasFav = localFav
+    const targetId = article.id_articulo
     
-    // 1. Cambio visual optimista (inmediato)
+    // Update local UI immediately for responsiveness
     setLocalFav(!wasFav)
-    
+
     try {
       if (wasFav) {
-        console.log('Quitando de favoritos ID:', targetId)
-        await api.delete(`/api/favoritos/${targetId}`)
+        console.log('Removing from favorites ID:', targetId)
+        await api.delete(`/api/favorites/${targetId}`)
         if (onToggleFav) onToggleFav(targetId, false)
       } else {
-        console.log('Añadiendo a favoritos ID:', targetId)
-        await api.post(`/api/favoritos/${targetId}`)
+        console.log('Adding to favorites ID:', targetId)
+        await api.post(`/api/favorites/${targetId}`)
         if (onToggleFav) onToggleFav(targetId, true)
       }
     } catch (error) {
-      console.error('Error al actualizar favoritos en el servidor:', error)
-      // Si falla, revertimos el cambio visual
+      console.error('Error updating favorites on server:', error)
+      // Revert visual change if request fails
       setLocalFav(wasFav)
     }
   }

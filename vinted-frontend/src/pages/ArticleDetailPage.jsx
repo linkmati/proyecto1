@@ -1,26 +1,26 @@
-import { useEffect, useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import OfferModal from '../components/OfferModal'
 import Toast from '../components/Toast'
+import OfferModal from '../components/OfferModal'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { isAuthenticated, userId } = useAuth()
   const [article, setArticle] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [activeImage, setActiveImage] = useState(0)
   const [isFavorite, setIsFavorite] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [showOfferModal, setShowOfferModal] = useState(false)
   const [toast, setToast] = useState({ message: '', tone: 'success' })
-  const [activeImage, setActiveImage] = useState(0)
 
   const loadData = async () => {
     try {
       setLoading(true)
       try {
-        const artRes = await api.get(`/api/articulos/${id}`)
+        const artRes = await api.get(`/api/items/${id}`)
         setArticle(artRes.data)
       } catch (err) {
         setToast({ message: 'El artículo no existe o hubo un error de conexión.', tone: 'error' })
@@ -30,7 +30,7 @@ export default function ArticleDetailPage() {
 
       if (isAuthenticated) {
         try {
-          const favRes = await api.get('/api/favoritos')
+          const favRes = await api.get('/api/favorites')
           const favs = favRes.data || []
           setIsFavorite(favs.some(f => String(f.id_articulo) === String(id)))
         } catch (fErr) {
@@ -50,9 +50,9 @@ export default function ArticleDetailPage() {
     if (!isAuthenticated) return navigate('/auth')
     try {
       if (isFavorite) {
-        await api.delete(`/api/favoritos/${id}`)
+        await api.delete(`/api/favorites/${id}`)
       } else {
-        await api.post(`/api/favoritos/${id}`)
+        await api.post(`/api/favorites/${id}`)
       }
       setIsFavorite(!isFavorite)
     } catch (error) {
@@ -66,13 +66,13 @@ export default function ArticleDetailPage() {
     if (!content || !content.trim()) return
 
     try {
-      await api.post('/api/mensajes/', {
+      await api.post('/api/messages/', {
         id_destinatario: article.id_vendedor,
         id_articulo: article.id_articulo,
         contenido: content
       })
       setToast({ message: 'Mensaje enviado correctamente.', tone: 'success' })
-      setTimeout(() => navigate('/mensajes'), 1500)
+      setTimeout(() => navigate('/messages'), 1500)
     } catch (error) {
       setToast({ message: 'No se pudo enviar el mensaje.', tone: 'error' })
     }

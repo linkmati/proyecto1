@@ -3,50 +3,57 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
-# --- Enums ---
-class EstadoArticulo(str, Enum):
-    disponible = "disponible"
-    reservado = "reservado"
-    vendido = "vendido"
-    desactivado = "desactivado" # Antes 'eliminado'
-    eliminado = "eliminado"      # Antes 'error'
+# --- Enums (Categories and States) ---
 
-# --- Artículos Schemas ---
-class ArticuloBase(BaseModel):
+class ItemStatus(str, Enum):
+    """
+    Defines the possible states of an item. 
+    Using an Enum prevents typos and makes the code more robust.
+    """
+    available = "disponible"
+    reserved = "reservado"
+    sold = "vendido"
+    deactivated = "desactivado"
+    deleted = "eliminado"
+
+# --- Item Schemas ---
+
+class ItemBase(BaseModel):
     titulo: str
     descripcion: Optional[str] = None
     precio_base: float
     categoria: str
 
-class ArticuloCreate(ArticuloBase):
-    estado_articulo: EstadoArticulo = EstadoArticulo.disponible
+class ItemCreate(ItemBase):
+    estado_articulo: ItemStatus = ItemStatus.available
 
-class ArticuloUpdate(BaseModel):
+class ItemUpdate(BaseModel):
     titulo: Optional[str] = None
     descripcion: Optional[str] = None
     precio_base: Optional[float] = None
     categoria: Optional[str] = None
-    estado_articulo: Optional[EstadoArticulo] = None
+    estado_articulo: Optional[ItemStatus] = None
 
-class FotoResponse(BaseModel):
+class PhotoResponse(BaseModel):
     id_foto: int
     image_url: str
     created_at: datetime
 
-class ArticuloResponse(ArticuloBase):
+class ItemResponse(ItemBase):
     id_articulo: int
-    id_vendedor: str # UUID
-    estado_articulo: EstadoArticulo
-    fotos: List[FotoResponse] = []
+    id_vendedor: str # UUID from Auth
+    estado_articulo: ItemStatus
+    fotos: List[PhotoResponse] = []
     created_at: datetime
     updated_at: datetime
 
 # --- Auth / User Schemas ---
-class UsuarioCreate(BaseModel):
+
+class UserCreate(BaseModel):
     email: str
     password: str
 
-class UsuarioResponse(BaseModel):
+class UserResponse(BaseModel):
     id_usuario: str # UUID
     email: str
     estado: str
@@ -56,40 +63,42 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
-# --- Ofertas Schemas ---
-class OfertaCreate(BaseModel):
+# --- Offer Schemas ---
+
+class OfferCreate(BaseModel):
     id_articulo: int
     importe: float
     mensaje: Optional[str] = None
 
-class OfertaContra(BaseModel):
+class CounterOfferRequest(BaseModel):
     nuevo_importe: float
     mensaje: Optional[str] = None
 
-class OfertaResponse(BaseModel):
+class OfferResponse(BaseModel):
     id_oferta: int
     estado: str
     importe: float
     mensaje: Optional[str] = None
-    id_comprador: str # UUID
+    id_comprador: str
     id_articulo: int
     created_at: datetime
     updated_at: datetime
 
-# --- Mensajería Schemas ---
-class ConversacionResponse(BaseModel):
+# --- Message Schemas ---
+
+class ConversationResponse(BaseModel):
     id_conversacion: int
     id_usuario_1: str
     id_usuario_2: str
     id_articulo: int
     created_at: datetime
 
-class MensajeCreate(BaseModel):
+class MessageCreate(BaseModel):
     id_destinatario: str
     id_articulo: int
     contenido: str
 
-class MensajeResponse(BaseModel):
+class MessageResponse(BaseModel):
     id_mensaje: int
     id_conversacion: int
     id_emisor: str
@@ -97,15 +106,15 @@ class MensajeResponse(BaseModel):
     leido: bool
     created_at: datetime
 
-# --- Favoritos Schemas ---
-class FavoritoResponse(BaseModel):
+# --- Favorite / Order Schemas ---
+
+class FavoriteResponse(BaseModel):
     id_favorito: int
     id_usuario: str
     id_articulo: int
     created_at: datetime
 
-# --- Pedidos Schemas ---
-class PedidoResponse(BaseModel):
+class OrderResponse(BaseModel):
     id_pedido: int
     id_comprador: str
     id_articulo: int

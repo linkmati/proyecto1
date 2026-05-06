@@ -23,7 +23,7 @@ export default function CounterOfferPage() {
 
     try {
       setLoading(true)
-      await api.patch(`/api/ofertas/${form.id_oferta}/contraoferta`, {
+      await api.patch(`/api/offers/${form.id_oferta}/counter-offer`, {
         nuevo_importe: Number(form.nuevo_importe),
         mensaje: form.mensaje,
       })
