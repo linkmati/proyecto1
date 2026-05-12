@@ -21,3 +21,17 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Client = Depends(g
     
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+def get_admin_user(token: str = Depends(oauth2_scheme), db: Client = Depends(get_supabase)):
+    """
+    Verifies the user is an admin.
+    """
+    user_id = get_current_user(token, db)
+    
+    # Check role in the database
+    response = db.table("usuarios").select("rol").eq("id_usuario", user_id).execute()
+    
+    if not response.data or response.data[0].get("rol") != "admin":
+        raise HTTPException(status_code=403, detail="Admin privileges required")
+        
+    return user_id

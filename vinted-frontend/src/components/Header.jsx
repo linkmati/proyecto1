@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import api from '../api/client'
 
 export default function Header() {
-  const { isAuthenticated, logout, userEmail } = useAuth()
+  const { isAuthenticated, logout, userEmail, role } = useAuth()
   const [unreadCount, setUnreadCount] = useState(0)
 
   useEffect(() => {
@@ -38,6 +38,7 @@ export default function Header() {
         <nav className="nav">
           <NavLink to="/">Inicio</NavLink>
           <NavLink to="/publicar">Publicar</NavLink>
+          {role === 'admin' && <NavLink to="/admin">Admin</NavLink>}
           {isAuthenticated && (
             <NavLink to="/mensajes" style={{ position: 'relative' }}>
               Mensajes

@@ -1,0 +1,38 @@
+-- ======================================================
+-- ADMIN ACCOUNT SETUP - VINTED CLONE
+-- ======================================================
+
+-- 1. ADD ROLE COLUMN TO USUARIOS TABLE
+-- Run this if the column does not exist yet.
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS rol VARCHAR(20) DEFAULT 'user' NOT NULL;
+
+-- 2. PROMOTE A USER TO ADMIN
+-- Replace 'your-email@example.com' with the email of the account you want to make admin.
+UPDATE usuarios SET rol = 'admin' WHERE email = 'your-email@example.com';
+
+-- 3. UPDATE RLS POLICIES FOR ADMIN ACCESS
+-- These commands update existing policies to allow the 'admin' role to see and manage everything.
+
+-- USUARIOS POLICIES
+DROP POLICY IF EXISTS "Usuarios pueden ver su propio perfil" ON usuarios;
+CREATE POLICY "Usuarios pueden ver su propio perfil" ON usuarios FOR SELECT USING (auth.uid() = id_usuario OR (SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+
+DROP POLICY IF EXISTS "Admins pueden ver todos los usuarios" ON usuarios;
+CREATE POLICY "Admins pueden ver todos los usuarios" ON usuarios FOR SELECT USING ((SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+
+DROP POLICY IF EXISTS "Admins pueden actualizar usuarios" ON usuarios;
+CREATE POLICY "Admins pueden actualizar usuarios" ON usuarios FOR UPDATE USING ((SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+
+-- ARTICULOS POLICIES
+DROP POLICY IF EXISTS "Cualquiera puede ver artículos disponibles" ON articulos;
+CREATE POLICY "Cualquiera puede ver artículos disponibles" ON articulos FOR SELECT USING (estado_articulo = 'disponible' OR auth.uid() = id_vendedor OR (SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+
+DROP POLICY IF EXISTS "Vendedores pueden editar sus artículos" ON articulos;
+CREATE POLICY "Vendedores pueden editar sus artículos" ON articulos FOR UPDATE USING (auth.uid() = id_vendedor OR (SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+
+DROP POLICY IF EXISTS "Admins pueden eliminar artículos" ON articulos;
+CREATE POLICY "Admins pueden eliminar artículos" ON articulos FOR DELETE USING ((SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+
+-- 4. VERIFY CHANGES
+-- Run this to see the list of users and their roles.
+-- SELECT email, rol, estado FROM usuarios;

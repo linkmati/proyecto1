@@ -7,6 +7,7 @@ export function AuthProvider({ children }) {
   const [token, setToken] = useState(localStorage.getItem('token'))
   const [userEmail, setUserEmail] = useState(localStorage.getItem('userEmail') || '')
   const [userId, setUserId] = useState(localStorage.getItem('userId') || '')
+  const [role, setRole] = useState(localStorage.getItem('role') || 'user')
 
   const login = async ({ email, password }) => {
     const form = new URLSearchParams()
@@ -23,15 +24,17 @@ export function AuthProvider({ children }) {
     localStorage.setItem('token', accessToken)
     localStorage.setItem('userEmail', email)
     
-    // Fetch UUID
+    // Fetch UUID and Role
     const profile = await api.get('/api/users/me', {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
     
     localStorage.setItem('userId', profile.data.id_usuario)
+    localStorage.setItem('role', profile.data.rol)
     setToken(accessToken)
     setUserEmail(email)
     setUserId(profile.data.id_usuario)
+    setRole(profile.data.rol)
     return response.data
   }
 
@@ -44,22 +47,25 @@ export function AuthProvider({ children }) {
     localStorage.removeItem('token')
     localStorage.removeItem('userEmail')
     localStorage.removeItem('userId')
+    localStorage.removeItem('role')
     setToken(null)
     setUserEmail('')
     setUserId('')
+    setRole('user')
   }
 
   const value = useMemo(
     () => ({
       token,
       userId,
+      role,
       isAuthenticated: Boolean(token),
       userEmail,
       login,
       register,
       logout,
     }),
-    [token, userEmail, userId],
+    [token, userEmail, userId, role],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

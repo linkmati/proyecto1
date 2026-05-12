@@ -7,6 +7,7 @@ import CounterOfferPage from './pages/CounterOfferPage'
 import ProfilePage from './pages/ProfilePage'
 import MessagesPage from './pages/MessagesPage'
 import ArticleDetailPage from './pages/ArticleDetailPage'
+import AdminPage from './pages/AdminPage'
 
 export default function App() {
   return (
@@ -20,6 +21,7 @@ export default function App() {
           <Route path="/articulo/:id" element={<ArticleDetailPage />} />
           <Route path="/perfil" element={<ProfilePage />} />
           <Route path="/mensajes" element={<MessagesPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>

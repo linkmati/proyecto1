@@ -57,6 +57,7 @@ class UserResponse(BaseModel):
     id_usuario: str # UUID
     email: str
     estado: str
+    rol: str
     created_at: datetime
 
 class TokenResponse(BaseModel):
