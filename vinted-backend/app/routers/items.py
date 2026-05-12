@@ -11,8 +11,6 @@ router = APIRouter(
     tags=["Items"]
 )
 
-# --- Internal Helper Functions (Dependencies) ---
-
 async def get_item_or_404(item_id: int, db: Client = Depends(get_supabase)):
     """
     Helper function to fetch an item and ensure it exists.
