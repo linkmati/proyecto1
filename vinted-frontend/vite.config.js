@@ -7,5 +7,11 @@ export default defineConfig({
     host: '0.0.0.0', // Forzamos escucha en todas las interfaces
     port: 5173,
     strictPort: true,
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8000',
+        changeOrigin: true,
+      }
+    }
   }
 })

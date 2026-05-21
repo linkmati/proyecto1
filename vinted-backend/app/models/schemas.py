@@ -35,17 +35,17 @@ class ItemUpdate(BaseModel):
     estado_articulo: Optional[ItemStatus] = None
 
 class PhotoResponse(BaseModel):
-    id_foto: int
+    id_foto: Optional[int] = None
     image_url: str
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 class ItemResponse(ItemBase):
     id_articulo: int
     id_vendedor: str # UUID from Auth
     estado_articulo: ItemStatus
-    fotos: List[PhotoResponse] = []
-    created_at: datetime
-    updated_at: datetime
+    fotos: Optional[List[PhotoResponse]] = []
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 # --- Auth / User Schemas ---
 
@@ -56,9 +56,9 @@ class UserCreate(BaseModel):
 class UserResponse(BaseModel):
     id_usuario: str # UUID
     email: str
-    estado: str
-    rol: str
-    created_at: datetime
+    estado: Optional[str] = "activo"
+    rol: Optional[str] = "user"
+    created_at: Optional[datetime] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -82,8 +82,8 @@ class OfferResponse(BaseModel):
     mensaje: Optional[str] = None
     id_comprador: str
     id_articulo: int
-    created_at: datetime
-    updated_at: datetime
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 # --- Message Schemas ---
 
@@ -92,7 +92,7 @@ class ConversationResponse(BaseModel):
     id_usuario_1: str
     id_usuario_2: str
     id_articulo: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 class MessageCreate(BaseModel):
     id_destinatario: str
@@ -105,7 +105,7 @@ class MessageResponse(BaseModel):
     id_emisor: str
     contenido: str
     leido: bool
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 # --- Favorite / Order Schemas ---
 
@@ -113,7 +113,7 @@ class FavoriteResponse(BaseModel):
     id_favorito: int
     id_usuario: str
     id_articulo: int
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
 class OrderResponse(BaseModel):
     id_pedido: int
@@ -121,4 +121,4 @@ class OrderResponse(BaseModel):
     id_articulo: int
     estado_pedido: str
     precio_final: float
-    created_at: datetime
+    created_at: Optional[datetime] = None

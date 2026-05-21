@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
 # --- Internal Helpers (Dependencies) ---
 
-async def get_conversation_or_404(conversation_id: int, db: Client = Depends(get_supabase)):
+async def get_conversation_or_404(conversation_id: int, db: Client = Depends(get_supabase_admin)):
     """
     Helper to fetch a conversation and ensure it exists.
     """
@@ -21,7 +21,7 @@ async def get_conversation_or_404(conversation_id: int, db: Client = Depends(get
 async def verify_conversation_participant(
     conversation_id: int, 
     user_id: str = Depends(get_current_user),
-    db: Client = Depends(get_supabase)
+    db: Client = Depends(get_supabase_admin)
 ):
     """
     Security check: Ensures the user is part of the conversation.
@@ -36,8 +36,7 @@ async def verify_conversation_participant(
 @router.post("", response_model=MessageResponse)
 async def send_message(
     message_data: MessageCreate,
-    db: Client = Depends(get_supabase),
-    admin_db: Client = Depends(get_supabase_admin),
+    db: Client = Depends(get_supabase_admin),
     user_id: str = Depends(get_current_user)
 ):
     """
@@ -53,15 +52,15 @@ async def send_message(
         u1, u2 = sorted([user_id, message_data.id_destinatario])
         
         # 3. Find or Create Conversation
-        # We use admin_db to handle conversation creation safely
-        conv_res = admin_db.table("conversaciones").select("id_conversacion") \
+        # We use db (admin) to handle conversation creation safely
+        conv_res = db.table("conversaciones").select("id_conversacion") \
             .eq("id_usuario_1", u1) \
             .eq("id_usuario_2", u2) \
             .eq("id_articulo", message_data.id_articulo) \
             .execute()
             
         if not conv_res.data:
-            new_conv = admin_db.table("conversaciones").insert({
+            new_conv = db.table("conversaciones").insert({
                 "id_usuario_1": u1,
                 "id_usuario_2": u2,
                 "id_articulo": message_data.id_articulo
@@ -78,7 +77,7 @@ async def send_message(
             "leido": False
         }
         
-        result = admin_db.table("mensajes").insert(new_message).execute()
+        result = db.table("mensajes").insert(new_message).execute()
         return result.data[0]
 
     except Exception as e:
@@ -87,12 +86,13 @@ async def send_message(
 
 @router.get("/conversations", response_model=List[Dict])
 def list_conversations(
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     user_id: str = Depends(get_current_user)
 ):
     """
     Lists all conversations for the current user with unread counts and latest activity.
     """
+    print(f"DEBUG - list_conversations START for user {user_id}")
     try:
         # Step 1: Fetch conversations where user is participant 1 or 2
         response = db.table("conversaciones") \
@@ -100,52 +100,79 @@ def list_conversations(
             .or_(f"id_usuario_1.eq.{user_id},id_usuario_2.eq.{user_id}") \
             .execute()
         
+        print(f"DEBUG - list_conversations: Found {len(response.data)} raw conversations")
+        
+        # Step 2: Get unread counts and last activity for all relevant conversations in fewer calls
+        # (For now, we'll keep the loop but make it more robust)
+        
         formatted_list = []
         for conv in response.data:
-            # Step 2: Get the timestamp of the very last message in this chat
-            last_msg = db.table("mensajes") \
-                .select("created_at") \
-                .eq("id_conversacion", conv["id_conversacion"]) \
-                .order("created_at", desc=True) \
-                .limit(1) \
-                .execute()
-            
-            # Step 3: Count messages the user hasn't read yet
-            unread_res = db.table("mensajes") \
-                .select("id_mensaje", count="exact") \
-                .eq("id_conversacion", conv["id_conversacion"]) \
-                .neq("id_emisor", user_id) \
-                .eq("leido", False) \
-                .execute()
+            try:
+                conv_id = conv["id_conversacion"]
+                
+                # Fetch last message and unread count in parallel or more efficiently if possible
+                # But staying with sequential for now for stability, adding safety
+                
+                last_msg_res = db.table("mensajes") \
+                    .select("created_at") \
+                    .eq("id_conversacion", conv_id) \
+                    .order("created_at", desc=True) \
+                    .limit(1) \
+                    .execute()
+                
+                unread_res = db.table("mensajes") \
+                    .select("id_mensaje", count="exact") \
+                    .eq("id_conversacion", conv_id) \
+                    .neq("id_emisor", user_id) \
+                    .eq("leido", False) \
+                    .execute()
 
-            # Identify the other person in the chat
-            is_user_1 = conv["id_usuario_1"] == user_id
-            other_user_email = conv["usuario2"]["email"] if is_user_1 else conv["usuario1"]["email"]
-            
-            activity_time = last_msg.data[0]["created_at"] if last_msg.data else conv["created_at"]
+                # Identify the other person safely
+                is_user_1 = str(conv["id_usuario_1"]) == str(user_id)
+                
+                # Join safety: handle case where user1/user2 might be a list or missing
+                def get_email(user_data):
+                    if not user_data: return "desconocido@vinted.com"
+                    if isinstance(user_data, list): return user_data[0].get("email", "desconocido@vinted.com")
+                    return user_data.get("email", "desconocido@vinted.com")
+                
+                u1_email = get_email(conv.get("usuario1"))
+                u2_email = get_email(conv.get("usuario2"))
+                
+                art_data = conv.get("articulos")
+                if isinstance(art_data, list): art_data = art_data[0] if art_data else {}
+                item_title = (art_data or {}).get("titulo", "Artículo no disponible")
+                
+                other_email = u2_email if is_user_1 else u1_email
+                activity_time = last_msg_res.data[0]["created_at"] if last_msg_res.data else conv["created_at"]
 
-            formatted_list.append({
-                "id_conversacion": conv["id_conversacion"],
-                "id_articulo": conv["id_articulo"],
-                "id_usuario_1": conv["id_usuario_1"],
-                "id_usuario_2": conv["id_usuario_2"],
-                "item_title": conv["articulos"]["titulo"],
-                "other_user_name": other_user_email.split("@")[0],
-                "unread_count": unread_res.count or 0,
-                "last_activity": activity_time
-            })
+                item_to_add = {
+                    "id_conversacion": conv_id,
+                    "id_articulo": conv["id_articulo"],
+                    "id_usuario_1": conv["id_usuario_1"],
+                    "id_usuario_2": conv["id_usuario_2"],
+                    "item_title": item_title,
+                    "other_user_name": other_email.split("@")[0],
+                    "unread_count": unread_res.count or 0,
+                    "last_activity": activity_time
+                }
+                print(f"DEBUG - list_conversations: Adding conversation {conv_id} with {item_to_add['other_user_name']}")
+                formatted_list.append(item_to_add)
+            except Exception as loop_err:
+                print(f"DEBUG - Error in conversation loop for {conv.get('id_conversacion')}: {loop_err}")
+                continue
         
-        # Step 4: Sort by most recent activity first
         formatted_list.sort(key=lambda x: x["last_activity"], reverse=True)
         return formatted_list
 
     except Exception as e:
+        print(f"DEBUG - list_conversations top-level error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
 async def list_conversation_messages(
     conversation_id: int,
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     # Participant check
     conversation: dict = Depends(verify_conversation_participant)
 ):
@@ -184,7 +211,7 @@ async def mark_conversation_as_read(
 
 @router.get("/unread-count")
 def get_total_unread_count(
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     user_id: str = Depends(get_current_user)
 ):
     """

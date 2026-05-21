@@ -1,0 +1,13 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "🚀 RUN PROJECT (With Ngrok)",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run_dev.py",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
+}

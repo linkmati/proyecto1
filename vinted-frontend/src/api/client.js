@@ -1,8 +1,8 @@
 import axios from 'axios'
 
 const api = axios.create({
-  // Si estamos en el navegador, usamos la IP desde la que accedemos a la web para el backend
-  baseURL: import.meta.env.VITE_API_URL || `http://${window.location.hostname}:8000`,
+  // Usamos el proxy de Vite en desarrollo para evitar problemas de CORS y túneles
+  baseURL: import.meta.env.VITE_API_URL || '',
   headers: {
     'Content-Type': 'application/json',
   },

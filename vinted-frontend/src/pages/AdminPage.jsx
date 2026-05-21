@@ -55,6 +55,16 @@ export default function AdminPage() {
     }
   }
 
+  const handleReactivateUser = async (id) => {
+    if (!window.confirm('¿Seguro que quieres reactivar a este usuario?')) return
+    try {
+      await api.patch(`/api/admin/users/${id}/reactivate`)
+      fetchData()
+    } catch (err) {
+      alert('Error al reactivar usuario')
+    }
+  }
+
   const handleDeleteOffer = async (id) => {
     if (!window.confirm('¿Seguro que quieres eliminar esta oferta?')) return
     try {
@@ -178,17 +188,27 @@ export default function AdminPage() {
                       <td style={tdStyle}>{item.email}</td>
                       <td style={tdStyle}>{item.estado}</td>
                       <td style={tdStyle}>{item.rol}</td>
-                      <td style={tdStyle}>{new Date(item.created_at).toLocaleDateString()}</td>
+                      <td style={tdStyle}>{item.created_at ? new Date(item.created_at).toLocaleDateString() : 'N/A'}</td>
                       <td style={tdStyle}>
-                        <button 
-                          className="button button--warning button--small" 
-                          style={{ marginRight: '0.5rem' }}
-                          aria-label={`Suspender usuario ${item.email}`}
-                          onClick={() => handleSuspendUser(item.id_usuario)}
-                          disabled={item.estado === 'suspendido'}
-                        >
-                          Suspender
-                        </button>
+                        {item.estado === 'suspendido' ? (
+                          <button 
+                            className="button button--primary button--small" 
+                            style={{ marginRight: '0.5rem' }}
+                            aria-label={`Reactivar usuario ${item.email}`}
+                            onClick={() => handleReactivateUser(item.id_usuario)}
+                          >
+                            Reactivar
+                          </button>
+                        ) : (
+                          <button 
+                            className="button button--warning button--small" 
+                            style={{ marginRight: '0.5rem' }}
+                            aria-label={`Suspender usuario ${item.email}`}
+                            onClick={() => handleSuspendUser(item.id_usuario)}
+                          >
+                            Suspender
+                          </button>
+                        )}
                       </td>
                     </>
                   )}

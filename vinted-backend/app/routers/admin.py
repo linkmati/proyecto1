@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from supabase import Client
 from typing import List, Optional
-from app.db.supabase import get_supabase
+from app.db.supabase import get_supabase, get_supabase_admin
 from app.core.security import get_admin_user
 from app.models.schemas import ItemResponse, UserResponse, OfferResponse
 
@@ -11,7 +11,7 @@ router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 @router.get("/items", response_model=List[ItemResponse])
 def get_all_items(
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     admin_id: str = Depends(get_admin_user),
     search: Optional[str] = None
 ):
@@ -31,7 +31,7 @@ def get_all_items(
 @router.delete("/items/{item_id}")
 def delete_item(
     item_id: int,
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     admin_id: str = Depends(get_admin_user)
 ):
     """
@@ -47,7 +47,7 @@ def delete_item(
 
 @router.get("/users", response_model=List[UserResponse])
 def get_all_users(
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     admin_id: str = Depends(get_admin_user),
     search: Optional[str] = None
 ):
@@ -60,14 +60,16 @@ def get_all_users(
             query = query.ilike("email", f"%{search}%")
             
         response = query.order("created_at", desc=True).execute()
+        print(f"DEBUG - Admin get_all_users: Found {len(response.data)} users")
         return response.data
     except Exception as e:
+        print(f"DEBUG - Admin get_all_users error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.patch("/users/{user_id}/suspend")
 def suspend_user(
     user_id: str,
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     admin_id: str = Depends(get_admin_user)
 ):
     """
@@ -79,10 +81,25 @@ def suspend_user(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+@router.patch("/users/{user_id}/reactivate")
+def reactivate_user(
+    user_id: str,
+    db: Client = Depends(get_supabase_admin),
+    admin_id: str = Depends(get_admin_user)
+):
+    """
+    Reactivates a suspended user account.
+    """
+    try:
+        db.table("usuarios").update({"estado": "activo"}).eq("id_usuario", user_id).execute()
+        return {"message": f"User {user_id} reactivated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.delete("/users/{user_id}")
 def delete_user(
     user_id: str,
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     admin_id: str = Depends(get_admin_user)
 ):
     """
@@ -99,7 +116,7 @@ def delete_user(
 
 @router.get("/offers", response_model=List[OfferResponse])
 def get_all_offers(
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     admin_id: str = Depends(get_admin_user)
 ):
     """
@@ -114,7 +131,7 @@ def get_all_offers(
 @router.delete("/offers/{offer_id}")
 def delete_offer(
     offer_id: int,
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     admin_id: str = Depends(get_admin_user)
 ):
     """

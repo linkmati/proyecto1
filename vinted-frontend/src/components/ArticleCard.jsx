@@ -89,7 +89,7 @@ export default function ArticleCard({ article, isFavorite = false, onToggleFav, 
         
         <h3 style={{ fontSize: '1rem', margin: '8px 0', fontWeight: '600' }}>{article.titulo}</h3>
         <div className="price" style={{ color: 'var(--primary)', fontWeight: '700' }}>
-          € {Number(article.precio_base).toFixed(2)}
+          € {article.precio_base ? Number(article.precio_base).toFixed(2) : '0.00'}
         </div>
 
         <button 

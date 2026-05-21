@@ -11,7 +11,7 @@ router = APIRouter(
     tags=["Items"]
 )
 
-async def get_item_or_404(item_id: int, db: Client = Depends(get_supabase)):
+async def get_item_or_404(item_id: int, db: Client = Depends(get_supabase_admin)):
     """
     Helper function to fetch an item and ensure it exists.
     If it doesn't exist, it stops the request and returns a 404 error.
@@ -24,7 +24,7 @@ async def get_item_or_404(item_id: int, db: Client = Depends(get_supabase)):
 async def verify_item_ownership(
     item_id: int, 
     current_user_id: str = Depends(get_current_user),
-    db: Client = Depends(get_supabase)
+    db: Client = Depends(get_supabase_admin)
 ):
     """
     Security check: Ensures the logged-in user is the owner of the item.
@@ -39,10 +39,10 @@ async def verify_item_ownership(
 
 @router.get("", response_model=List[ItemResponse])
 def list_items(
-    category: Optional[str] = None,
+    categoria: Optional[str] = None,
     search: Optional[str] = None,
     limit: int = 20,
-    db: Client = Depends(get_supabase)
+    db: Client = Depends(get_supabase_admin)
 ):
     """
     Returns a list of available items. 
@@ -53,8 +53,8 @@ def list_items(
         query = db.table("articulos").select("*, fotos:fotos_articulo(*)").eq("estado_articulo", "disponible")
         
         # Apply filters if provided
-        if category and category != "Todas":
-            query = query.eq("categoria", category)
+        if categoria and categoria != "Todas":
+            query = query.eq("categoria", categoria)
             
         if search:
             # Look for matches in title OR description
@@ -62,13 +62,17 @@ def list_items(
             
         # Execute query with sorting and limit
         response = query.order("created_at", desc=True).limit(limit).execute()
+        print(f"DEBUG - list_items: Found {len(response.data)} available items")
+        if response.data:
+            print(f"DEBUG - First item sample: {response.data[0]}")
         return response.data
     
     except Exception as e:
+        print(f"DEBUG - list_items error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching items: {str(e)}")
 
 @router.get("/{item_id}", response_model=ItemResponse)
-def get_item_details(item_id: int, db: Client = Depends(get_supabase)):
+def get_item_details(item_id: int, db: Client = Depends(get_supabase_admin)):
     """
     Returns full details for a single item, including its photos.
     """
@@ -83,10 +87,10 @@ def get_item_details(item_id: int, db: Client = Depends(get_supabase)):
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/", response_model=ItemResponse)
+@router.post("", response_model=ItemResponse)
 def create_item(
     item_data: ItemCreate, 
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     user_id: str = Depends(get_current_user)
 ):
     """
@@ -112,7 +116,7 @@ def create_item(
 async def update_item(
     item_id: int, 
     update_data: ItemUpdate,
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     # This dependency automatically checks if the user owns the item!
     item: dict = Depends(verify_item_ownership)
 ):
@@ -140,7 +144,7 @@ async def update_item(
 @router.delete("/{item_id}")
 async def deactivate_item(
     item_id: int,
-    db: Client = Depends(get_supabase),
+    db: Client = Depends(get_supabase_admin),
     # Security check included here
     item: dict = Depends(verify_item_ownership)
 ):
