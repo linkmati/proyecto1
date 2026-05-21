@@ -1,39 +1,43 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import Toast from '../components/Toast'
 
 export default function AuthPage() {
-  const navigate = useNavigate()
-  const { login, register } = useAuth()
-  const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ email: '', password: '' })
-  const [toast, setToast] = useState({ message: '', tone: 'success' })
+  const [searchParams] = useSearchParams()
+  const [isLogin, setIsLogin] = useState(true)
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [nombre, setNombre] = useState('')
   const [loading, setLoading] = useState(false)
+  const [toast, setToast] = useState({ message: '', tone: 'success' })
 
-  const onChange = (e) => {
-    setForm((current) => ({ ...current, [e.target.name]: e.target.value }))
-  }
+  const { login, register } = useAuth()
+  const navigate = useNavigate()
 
-  const onSubmit = async (e) => {
+  useEffect(() => {
+    const mode = searchParams.get('mode')
+    if (mode === 'register') {
+      setIsLogin(false)
+    } else {
+      setIsLogin(true)
+    }
+  }, [searchParams])
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
+    setLoading(true)
     try {
-      setLoading(true)
-      if (mode === 'register') {
-        await register(form)
-        setToast({
-          message: 'Cuenta creada. Ahora inicia sesión para publicar y ofertar.',
-          tone: 'success',
-        })
-        setMode('login')
+      if (isLogin) {
+        await login(email, password)
       } else {
-        await login(form)
-        navigate('/')
+        await register(email, password, nombre)
       }
+      navigate('/')
     } catch (error) {
-      setToast({
-        message: error.response?.data?.detail || 'No se pudo completar la operación.',
-        tone: 'error',
+      setToast({ 
+        message: error.response?.data?.detail || 'Error en la autenticación', 
+        tone: 'error' 
       })
     } finally {
       setLoading(false)
@@ -41,72 +45,74 @@ export default function AuthPage() {
   }
 
   return (
-    <section className="container auth-layout">
-      <div className="auth-copy card">
-        <span className="eyebrow">Acceso seguro</span>
-        <h1>{mode === 'login' ? 'Bienvenido de nuevo' : 'Crea tu cuenta'}</h1>
-        <p>
-          Tu backend usa Supabase Auth. Aquí ya está preparado el formulario para
-          registrarse e iniciar sesión sin pelearte con tokens a mano.
+    <div className="container" style={{ display: 'grid', placeItems: 'center', minHeight: 'calc(100vh - var(--header-height))' }}>
+      <div className="card" style={{ width: '100%', maxWidth: '400px', padding: '40px' }}>
+        <h1 style={{ textAlign: 'center', marginBottom: '8px' }}>
+          {isLogin ? '¡Hola de nuevo!' : 'Crea tu cuenta'}
+        </h1>
+        <p style={{ textAlign: 'center', color: 'var(--text-soft)', marginBottom: '32px', fontSize: '0.9rem' }}>
+          {isLogin ? 'Introduce tus datos para acceder' : 'Únete a la mayor comunidad de segunda mano'}
         </p>
-        <ul className="feature-list">
-          <li>Login con JWT</li>
-          <li>Persistencia de sesión en localStorage</li>
-          <li>Preparado para publicar artículos y mandar ofertas</li>
-        </ul>
-      </div>
 
-      <div className="card auth-form-card">
-        <div className="tab-row">
-          <button
-            className={mode === 'login' ? 'tab tab--active' : 'tab'}
-            onClick={() => setMode('login')}
-            type="button"
-          >
-            Iniciar sesión
-          </button>
-          <button
-            className={mode === 'register' ? 'tab tab--active' : 'tab'}
-            onClick={() => setMode('register')}
-            type="button"
-          >
-            Registrarse
-          </button>
-        </div>
-
-        <form className="form" onSubmit={onSubmit}>
-          <label>
-            Correo electrónico
+        <form className="form" onSubmit={handleSubmit}>
+          {!isLogin && (
+            <div>
+              <label>Nombre de usuario</label>
+              <input
+                type="text"
+                required
+                className="search-input"
+                style={{ paddingLeft: '16px' }}
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+              />
+            </div>
+          )}
+          <div>
+            <label>Email</label>
             <input
               type="email"
-              name="email"
-              value={form.email}
-              onChange={onChange}
               required
-              placeholder="ejemplo@correo.com"
+              className="search-input"
+              style={{ paddingLeft: '16px' }}
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
             />
-          </label>
-
-          <label>
-            Contraseña
+          </div>
+          <div>
+            <label>Contraseña</label>
             <input
               type="password"
-              name="password"
-              value={form.password}
-              onChange={onChange}
               required
-              placeholder="Tu contraseña"
+              className="search-input"
+              style={{ paddingLeft: '16px' }}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
             />
-          </label>
-
-          <button className="button button--primary button--full" disabled={loading}>
-            {loading
-              ? 'Procesando...'
-              : mode === 'login'
-                ? 'Entrar'
-                : 'Crear cuenta'}
+          </div>
+          
+          <button 
+            type="submit" 
+            className="btn btn-primary" 
+            style={{ width: '100%', marginTop: '12px', padding: '14px', borderRadius: '4px' }}
+            disabled={loading}
+          >
+            {loading ? 'Cargando...' : isLogin ? 'Iniciar sesión' : 'Registrarse'}
           </button>
         </form>
+
+        <div style={{ textAlign: 'center', marginTop: '24px', fontSize: '0.9rem' }}>
+          <span style={{ color: 'var(--text-muted)' }}>
+            {isLogin ? '¿No tienes cuenta? ' : '¿Ya tienes cuenta? '}
+          </span>
+          <button 
+            className="btn btn-ghost" 
+            style={{ padding: '4px 8px', color: 'var(--primary)', fontWeight: '700' }}
+            onClick={() => setIsLogin(!isLogin)}
+          >
+            {isLogin ? 'Regístrate' : 'Inicia sesión'}
+          </button>
+        </div>
       </div>
 
       <Toast
@@ -114,6 +120,6 @@ export default function AuthPage() {
         tone={toast.tone}
         onClose={() => setToast({ message: '', tone: 'success' })}
       />
-    </section>
+    </div>
   )
 }

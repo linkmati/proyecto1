@@ -19,12 +19,21 @@ def get_all_items(
     Returns all items in the platform. Supports optional search by title.
     """
     try:
-        query = db.table("articulos").select("*, fotos:fotos_articulo(*)")
+        query = db.table("articulos").select("*, fotos:fotos_articulo(*), vendedor:usuarios(nombre_usuario, email)")
         if search:
             query = query.ilike("titulo", f"%{search}%")
         
         response = query.order("created_at", desc=True).execute()
-        return response.data
+        
+        # Flatten the seller name into the response
+        results = []
+        for item in response.data:
+            v_info = item.get("vendedor")
+            if isinstance(v_info, list): v_info = v_info[0] if v_info else {}
+            item["vendedor_nombre"] = (v_info or {}).get("nombre_usuario") or (v_info or {}).get("email", "").split("@")[0] or "Vendedor"
+            results.append(item)
+            
+        return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -123,8 +132,16 @@ def get_all_offers(
     Returns all offers.
     """
     try:
-        response = db.table("ofertas").select("*").order("created_at", desc=True).execute()
-        return response.data
+        response = db.table("ofertas").select("*, articulos(titulo)").order("created_at", desc=True).execute()
+        
+        results = []
+        for offer in response.data:
+            art = offer.get("articulos")
+            if isinstance(art, list): art = art[0] if art else {}
+            offer["articulo_titulo"] = (art or {}).get("titulo", "Artículo no disponible")
+            results.append(offer)
+            
+        return results
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

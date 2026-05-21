@@ -1,15 +1,13 @@
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useContext, useMemo, useState, useEffect } from 'react'
 import api from '../api/client'
 
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(localStorage.getItem('token'))
-  const [userEmail, setUserEmail] = useState(localStorage.getItem('userEmail') || '')
-  const [userId, setUserId] = useState(localStorage.getItem('userId') || '')
-  const [role, setRole] = useState(localStorage.getItem('role') || 'user')
+  const [user, setUser] = useState(JSON.parse(localStorage.getItem('userData') || 'null'))
 
-  const login = async ({ email, password }) => {
+  const login = async (email, password) => {
     const form = new URLSearchParams()
     form.append('username', email)
     form.append('password', password)
@@ -22,50 +20,48 @@ export function AuthProvider({ children }) {
 
     const accessToken = response.data.access_token
     localStorage.setItem('token', accessToken)
-    localStorage.setItem('userEmail', email)
     
-    // Fetch UUID and Role
+    // Fetch profile (includes name and role)
     const profile = await api.get('/api/users/me', {
       headers: { Authorization: `Bearer ${accessToken}` }
     })
     
-    localStorage.setItem('userId', profile.data.id_usuario)
-    localStorage.setItem('role', profile.data.rol)
+    const userData = profile.data
+    console.log("DEBUG - AuthContext: Logged in user data:", userData)
+    
+    localStorage.setItem('userData', JSON.stringify(userData))
+    
     setToken(accessToken)
-    setUserEmail(email)
-    setUserId(profile.data.id_usuario)
-    setRole(profile.data.rol)
+    setUser(userData)
     return response.data
   }
 
-  const register = async ({ email, password }) => {
-    const response = await api.post('/api/auth/register', { email, password })
+  const register = async (email, password, nombre) => {
+    const response = await api.post('/api/auth/register', { 
+      email, 
+      password, 
+      nombre_usuario: nombre 
+    })
     return response.data
   }
 
   const logout = () => {
     localStorage.removeItem('token')
-    localStorage.removeItem('userEmail')
-    localStorage.removeItem('userId')
-    localStorage.removeItem('role')
+    localStorage.removeItem('userData')
     setToken(null)
-    setUserEmail('')
-    setUserId('')
-    setRole('user')
+    setUser(null)
   }
 
   const value = useMemo(
     () => ({
       token,
-      userId,
-      role,
+      user,
       isAuthenticated: Boolean(token),
-      userEmail,
       login,
       register,
       logout,
     }),
-    [token, userEmail, userId, role],
+    [token, user],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

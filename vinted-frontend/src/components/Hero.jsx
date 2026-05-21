@@ -1,47 +1,58 @@
-import { Link } from 'react-router-dom'
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { ArrowRight } from 'lucide-react';
 
-export default function Hero() {
+const Hero = () => {
+  const navigate = useNavigate();
+
   return (
-    <section className="hero">
-      <div className="container hero__grid">
-        <div>
-          <span className="eyebrow">Marketplace moderno conectado a FastAPI</span>
-          <h1>Compra, vende y negocia con una interfaz que sí da gusto abrir.</h1>
-          <p>
-            Este frontend usa tus endpoints de autenticación, artículos y ofertas.
-            Bonito por fuera, útil por dentro. Como debería ser todo software decente.
+    <div className="hero-section">
+      <div className="container" style={{ display: 'flex', alignItems: 'center', gap: '40px' }}>
+        <motion.div 
+          className="hero-content" 
+          style={{ flex: 1.2 }}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+        >
+          <h1 className="hero-title">
+            Vende lo que ya no usas. <span style={{ color: 'var(--primary)' }}>Haz espacio para lo nuevo.</span>
+          </h1>
+          
+          <p style={{ fontSize: '1.1rem', color: 'var(--text-muted)', marginBottom: '32px', maxWidth: '540px' }}>
+            Únete a nuestra comunidad. Vende ropa, accesorios y más de forma sencilla y segura.
           </p>
-          <div className="hero__actions">
-            <Link className="button button--primary" to="/publicar">
-              Publicar artículo
-            </Link>
-            <Link className="button button--secondary" to="/auth">
-              Crear cuenta
-            </Link>
+          
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button className="btn btn-primary" onClick={() => navigate('/publicar')} style={{ padding: '14px 28px', fontSize: '1rem', borderRadius: '4px' }}>
+              Vender ahora
+              <ArrowRight size={18} />
+            </button>
+            <button className="btn btn-secondary" onClick={() => {
+               document.getElementById('items-grid')?.scrollIntoView({ behavior: 'smooth' });
+            }} style={{ padding: '14px 28px', fontSize: '1rem', borderRadius: '4px' }}>
+              Ver novedades
+            </button>
           </div>
-        </div>
+        </motion.div>
 
-        <div className="hero-card">
-          <div className="hero-card__row">
-            <span className="status-dot"></span>
-            <span>Backend conectado a Supabase</span>
-          </div>
-          <div className="hero-card__stats">
-            <article>
-              <strong>Auth</strong>
-              <span>Registro y login</span>
-            </article>
-            <article>
-              <strong>Artículos</strong>
-              <span>Listado y creación</span>
-            </article>
-            <article>
-              <strong>Ofertas</strong>
-              <span>Oferta y contraoferta</span>
-            </article>
-          </div>
-        </div>
+        <motion.div 
+          className="hero-image" 
+          style={{ flex: 1, display: 'none', display: 'block' }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1 }}
+        >
+          <img 
+            src="https://images.unsplash.com/photo-1558769132-cb1aea458c5e?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80" 
+            alt="Fashion" 
+            style={{ width: '100%', height: '400px', objectFit: 'cover', borderRadius: 'var(--radius-md)' }}
+          />
+        </motion.div>
       </div>
-    </section>
-  )
-}
+    </div>
+  );
+};
+
+export default Hero;

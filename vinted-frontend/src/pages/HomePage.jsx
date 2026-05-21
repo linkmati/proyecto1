@@ -1,15 +1,16 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import ArticleCard from '../components/ArticleCard'
+import Hero from '../components/Hero'
 import Toast from '../components/Toast'
 import OfferModal from '../components/OfferModal'
+import { motion, AnimatePresence } from 'framer-motion'
 
-export default function HomePage() {
+export default function HomePage({ searchTerm = '' }) {
   const { isAuthenticated } = useAuth()
   const [articles, setArticles] = useState([])
-  const [favorites, setFavorites] = useState([]) // List of article IDs (Strings)
-  const [query, setQuery] = useState('')
+  const [favorites, setFavorites] = useState([])
   const [category, setCategory] = useState('Todas')
   const [loading, setLoading] = useState(true)
   const [selectedArticle, setSelectedArticle] = useState(null)
@@ -22,17 +23,14 @@ export default function HomePage() {
       setLoading(true)
       const params = { limit: 20 }
       if (category !== 'Todas') params.categoria = category
-      if (query.trim()) params.search = query.trim()
+      if (searchTerm.trim()) params.search = searchTerm.trim()
       
       const [artRes, favRes] = await Promise.all([
         api.get('/api/items', { params }).catch(() => ({ data: [] })),
         isAuthenticated ? api.get('/api/favorites').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
       ])
       
-      const fetchedArticles = Array.isArray(artRes.data) ? artRes.data : []
-      setArticles(fetchedArticles)
-
-      // CRÍTICO: Normalizar IDs a String para la comparación
+      setArticles(Array.isArray(artRes.data) ? artRes.data : [])
       const favIds = (Array.isArray(favRes.data) ? favRes.data : []).map(f => String(f.id_articulo))
       setFavorites(favIds)
     } catch (error) {
@@ -43,77 +41,86 @@ export default function HomePage() {
     }
   }
 
-  // Debounce para la búsqueda por texto
   useEffect(() => {
     const timer = setTimeout(() => {
       loadData()
     }, 400)
     return () => clearTimeout(timer)
-  }, [query, category, isAuthenticated])
+  }, [searchTerm, category, isAuthenticated])
 
-  const onToggleFav = (id, isAdded) => {
+  const toggleFavorite = async (id) => {
+    if (!isAuthenticated) {
+      setToast({ message: 'Inicia sesión para guardar favoritos.', tone: 'error' })
+      return
+    }
+
     const idStr = String(id)
-    if (isAdded) {
-      setFavorites(prev => [...prev, idStr])
-    } else {
-      setFavorites(prev => prev.filter(favId => favId !== idStr))
+    const isFav = favorites.includes(idStr)
+
+    try {
+      if (isFav) {
+        setFavorites(prev => prev.filter(f => f !== idStr))
+        await api.delete(`/api/favorites/${id}`)
+      } else {
+        setFavorites(prev => [...prev, idStr])
+        await api.post(`/api/favorites/${id}`) // FIXED ENDPOINT
+      }
+    } catch (e) {
+      console.error('Toggle favorite error:', e)
+      loadData()
+      setToast({ message: 'Error al actualizar favoritos.', tone: 'error' })
     }
   }
 
   return (
-    <div className="container page-section">
-      <div className="hero" style={{ padding: '40px 0', textAlign: 'center' }}>
-        <span className="eyebrow">Segunda mano con estilo</span>
-        <h1 style={{ fontSize: '3rem', margin: '16px 0' }}>Encuentra tesoros únicos</h1>
-        <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-          <input
-            className="search-input"
-            style={{ maxWidth: '100%', padding: '16px 24px', fontSize: '1.1rem' }}
-            placeholder="¿Qué estás buscando?"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </div>
-      </div>
+    <div style={{ background: 'var(--bg)' }}>
+      <Hero />
 
-      <div className="categories-bar">
-        {CATEGORIAS.map(cat => (
-          <div 
-            key={cat} 
-            className={`category-pill ${category === cat ? 'category-pill--active' : ''}`}
-            onClick={() => setCategory(cat)}
-          >
-            {cat}
+      <div className="container" id="items-grid">
+        <div style={{ marginBottom: '32px' }}>
+           <h2 style={{ fontSize: '1.5rem', marginBottom: '20px', fontWeight: '600' }}>
+             {searchTerm ? `Resultados para "${searchTerm}"` : (category === 'Todas' ? 'Novedades' : category)}
+           </h2>
+           
+           <div className="cat-bar">
+             {CATEGORIAS.map(cat => (
+               <button 
+                 key={cat} 
+                 className={`cat-item ${category === cat ? 'active' : ''}`}
+                 onClick={() => setCategory(cat)}
+               >
+                 {cat}
+               </button>
+             ))}
+           </div>
+        </div>
+
+        {loading ? (
+          <div className="article-grid">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="article-card" style={{ height: '300px', background: 'var(--surface-muted)', borderRadius: 'var(--radius-sm)' }} />
+            ))}
           </div>
-        ))}
+        ) : (
+          <div className="article-grid">
+            {articles.length === 0 ? (
+              <div className="empty-state" style={{ padding: '60px 0', textAlign: 'center', gridColumn: '1/-1' }}>
+                <p style={{ color: 'var(--text-muted)' }}>No se han encontrado artículos.</p>
+                {searchTerm && <button className="btn btn-ghost" onClick={() => window.location.reload()}>Limpiar búsqueda</button>}
+              </div>
+            ) : (
+              articles.map((article) => (
+                <ArticleCard 
+                  key={article.id_articulo} 
+                  article={article} 
+                  isFavorite={favorites.includes(String(article.id_articulo))}
+                  onToggleFavorite={toggleFavorite}
+                />
+              ))
+            )}
+          </div>
+        )}
       </div>
-
-      <div className="section-heading">
-        <h2>{category === 'Todas' ? 'Últimas novedades' : `Novedades en ${category}`}</h2>
-      </div>
-
-      {loading ? (
-        <div className="empty-state">Buscando...</div>
-      ) : articles.length === 0 ? (
-        <div className="empty-state">No se han encontrado artículos.</div>
-      ) : (
-        <div className="article-grid">
-          {articles.map((article) => {
-            const artIdStr = String(article.id_articulo)
-            const isFav = favorites.includes(artIdStr)
-            
-            return (
-              <ArticleCard 
-                key={article.id_articulo} 
-                article={article} 
-                onOffer={setSelectedArticle} 
-                isFavorite={isFav}
-                onToggleFav={onToggleFav}
-              />
-            )
-          })}
-        </div>
-      )}
 
       <OfferModal
         article={selectedArticle}

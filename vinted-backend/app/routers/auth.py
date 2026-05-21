@@ -40,6 +40,7 @@ def register_user(
         admin_db.table("usuarios").upsert({
             "id_usuario": new_user_id,
             "email": user_data.email,
+            "nombre_usuario": user_data.nombre_usuario,
             "estado": "activo"
         }).execute()
         
@@ -79,22 +80,27 @@ def login_user(
         if not auth_response.user:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-        # Step 2: Ensure the user profile exists and check status (Sync & Security Check)
-        # We fetch the profile first to check if they are suspended
-        profile_res = admin_db.table("usuarios").select("estado").eq("id_usuario", auth_response.user.id).execute()
+        # Step 2: Ensure the user profile exists and check status (Security Check)
+        # We fetch the profile first. If it doesn't exist, we don't allow login
+        # because the user might have been deleted from our database.
+        profile_res = admin_db.table("usuarios").select("*").eq("id_usuario", auth_response.user.id).execute()
         
-        if profile_res.data and profile_res.data[0].get("estado") == "suspendido":
+        if not profile_res.data:
+            raise HTTPException(
+                status_code=401, 
+                detail="Tu cuenta ya no existe en nuestra base de datos. Por favor, regístrate de nuevo."
+            )
+            
+        if profile_res.data[0].get("estado") == "suspendido":
             raise HTTPException(
                 status_code=403, 
                 detail="Tu cuenta ha sido suspendida. Contacta con soporte para más información."
             )
 
-        # Upsert ensures the user profile is up to date
-        admin_db.table("usuarios").upsert({
-            "id_usuario": auth_response.user.id,
-            "email": auth_response.user.email,
-            "estado": profile_res.data[0].get("estado") if profile_res.data else "activo"
-        }).execute()
+        # Update last login or just ensure email is synced
+        admin_db.table("usuarios").update({
+            "email": auth_response.user.email
+        }).eq("id_usuario", auth_response.user.id).execute()
         
         # Step 3: Return the access token needed for future requests
         return {

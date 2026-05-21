@@ -1,189 +1,254 @@
-import React, { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import Toast from '../components/Toast'
 import OfferModal from '../components/OfferModal'
+import { motion } from 'framer-motion'
+import { ShieldCheck, MessageCircle, Heart, Share2, Tag, Send, User } from 'lucide-react'
 
 export default function ArticleDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
-  const { isAuthenticated, userId } = useAuth()
+  const { user } = useAuth()
   const [article, setArticle] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [activeImage, setActiveImage] = useState(0)
+  const [loading, setLoading] = useState(true)
   const [isFavorite, setIsFavorite] = useState(false)
-  const [showOfferModal, setShowOfferModal] = useState(false)
+  const [selectedOffer, setSelectedOffer] = useState(null)
   const [toast, setToast] = useState({ message: '', tone: 'success' })
-
-  const loadData = async () => {
-    try {
-      setLoading(true)
-      try {
-        const artRes = await api.get(`/api/items/${id}`)
-        setArticle(artRes.data)
-      } catch (err) {
-        setToast({ message: 'El artículo no existe o hubo un error de conexión.', tone: 'error' })
-        setLoading(false)
-        return
-      }
-
-      if (isAuthenticated) {
-        try {
-          const favRes = await api.get('/api/favorites')
-          const favs = favRes.data || []
-          setIsFavorite(favs.some(f => String(f.id_articulo) === String(id)))
-        } catch (fErr) {
-          console.warn('No favs loaded')
-        }
-      }
-    } finally {
-      setLoading(false)
-    }
-  }
+  
+  const [showChatBox, setShowChatBox] = useState(false)
+  const [firstMessage, setFirstMessage] = useState('')
 
   useEffect(() => {
-    if (id) loadData()
-  }, [id, isAuthenticated])
+    const fetchData = async () => {
+      try {
+        const [artRes, favRes] = await Promise.all([
+          api.get(`/api/items/${id}`),
+          user ? api.get('/api/favorites') : Promise.resolve({ data: [] })
+        ])
+        setArticle(artRes.data)
+        setIsFavorite(favRes.data.some(f => String(f.id_articulo) === String(id)))
+      } catch (error) {
+        setToast({ message: 'No se pudo cargar el artículo.', tone: 'error' })
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchData()
+  }, [id, user])
 
-  const toggleFav = async () => {
-    if (!isAuthenticated) return navigate('/auth')
+  const toggleFavorite = async () => {
+    if (!user) {
+      setToast({ message: 'Inicia sesión para guardar favoritos.', tone: 'error' })
+      return
+    }
+
+    const previousState = isFavorite
+    setIsFavorite(!previousState) // Optimistic update
+
     try {
-      if (isFavorite) {
+      if (previousState) {
         await api.delete(`/api/favorites/${id}`)
       } else {
         await api.post(`/api/favorites/${id}`)
       }
-      setIsFavorite(!isFavorite)
-    } catch (error) {
+    } catch (e) {
+      setIsFavorite(previousState)
       setToast({ message: 'Error al actualizar favoritos.', tone: 'error' })
     }
   }
 
-  const handleAskSeller = async () => {
-    if (!isAuthenticated) return navigate('/auth')
-    const content = prompt('Escribe tu mensaje para el vendedor:')
-    if (!content || !content.trim()) return
+  const handleShare = async () => {
+    const shareData = {
+      title: article.titulo,
+      text: `Mira este artículo en Mas Tienda: ${article.titulo}`,
+      url: window.location.href
+    }
 
     try {
-      await api.post('/api/messages/', {
-        id_destinatario: article.id_vendedor,
-        id_articulo: article.id_articulo,
-        contenido: content
-      })
-      setToast({ message: 'Mensaje enviado correctamente.', tone: 'success' })
-      setTimeout(() => navigate('/messages'), 1500)
-    } catch (error) {
-      setToast({ message: 'No se pudo enviar el mensaje.', tone: 'error' })
+      if (navigator.share) {
+        await navigator.share(shareData)
+      } else {
+        await navigator.clipboard.writeText(window.location.href)
+        setToast({ message: 'Enlace copiado al portapapeles', tone: 'success' })
+      }
+    } catch (err) {
+      console.error('Error al compartir:', err)
     }
   }
 
-  const nextImage = () => {
-    if (!article?.fotos) return
-    setActiveImage((prev) => (prev + 1) % article.fotos.length)
+  const handleStartChat = async (e) => {
+    e.preventDefault()
+    if (!firstMessage.trim()) return
+    try {
+      await api.post('/api/messages', {
+        id_destinatario: article.id_vendedor,
+        id_articulo: article.id_articulo,
+        contenido: firstMessage
+      })
+      setToast({ message: 'Mensaje enviado!', tone: 'success' })
+      setTimeout(() => navigate(`/mensajes?to=${article.id_vendedor}&item=${article.id_articulo}`), 1000)
+    } catch (error) {
+      setToast({ message: 'Error al enviar mensaje.', tone: 'error' })
+    }
   }
 
-  const prevImage = () => {
-    if (!article?.fotos) return
-    setActiveImage((prev) => (prev - 1 + article.fotos.length) % article.fotos.length)
-  }
-
-  if (loading) return <div className="container page-section"><div className="empty-state">Cargando detalles...</div></div>
-  if (!article) return <div className="container page-section"><div className="card">Artículo no encontrado.</div></div>
-
-  const isOwner = userId === article.id_vendedor
+  if (loading) return <div className="container" style={{ padding: '100px 0', textAlign: 'center' }}>Cargando...</div>
+  if (!article) return <div className="container" style={{ padding: '100px 0', textAlign: 'center' }}>Artículo no encontrado</div>
 
   return (
-    <div className="container page-section">
-      <div className="publish-layout" style={{ gridTemplateColumns: '400px 1fr', gap: '40px', alignItems: 'start' }}>
-        
-        {/* Galería de imágenes (MÁS PEQUEÑA) */}
-        <div className="card" style={{ padding: '0', overflow: 'hidden' }}>
-          <div style={{ position: 'relative', height: '350px', background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {article.fotos?.length > 0 ? (
+    <div className="container" style={{ padding: '40px 0' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '40px' }}>
+        {/* Images */}
+        <motion.div 
+          initial={{ opacity: 0, x: -20 }}
+          animate={{ opacity: 1, x: 0 }}
+          style={{ display: 'grid', gap: '16px' }}
+        >
+          {article.fotos?.length > 0 ? (
+            article.fotos.map((foto, idx) => (
               <img 
-                src={article.fotos[activeImage].image_url} 
+                key={idx} 
+                src={foto.image_url} 
                 alt={article.titulo} 
-                style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} 
+                style={{ width: '100%', borderRadius: 'var(--radius-md)', border: '1px solid var(--line)' }}
               />
-            ) : (
-              <div style={{ color: '#999' }}>Sin imágenes</div>
-            )}
-            
-            {article.fotos?.length > 1 && (
-              <>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); prevImage(); }}
-                  style={{ position: 'absolute', left: '10px', background: 'rgba(255,255,255,0.9)', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow)' }}
-                >‹</button>
-                <button 
-                  onClick={(e) => { e.stopPropagation(); nextImage(); }}
-                  style={{ position: 'absolute', right: '10px', background: 'rgba(255,255,255,0.9)', border: 'none', width: '32px', height: '32px', borderRadius: '50%', cursor: 'pointer', display: 'grid', placeItems: 'center', boxShadow: 'var(--shadow)' }}
-                >›</button>
-              </>
-            )}
-
-            <button 
-              className="fav-btn" 
-              onClick={toggleFav}
-              style={{ position: 'absolute', top: '15px', right: '15px', width: '40px', height: '40px', fontSize: '1.3rem', color: isFavorite ? '#ef4444' : '#a3a3a3', background: 'white', borderRadius: '50%', border: 'none', boxShadow: 'var(--shadow)', cursor: 'pointer' }}
-            >
-              {isFavorite ? '❤️' : '🤍'}
-            </button>
-          </div>
-          
-          {article.fotos?.length > 1 && (
-            <div style={{ display: 'flex', gap: '8px', padding: '12px', overflowX: 'auto', borderTop: '1px solid var(--line)' }}>
-              {article.fotos.map((foto, idx) => (
-                <img 
-                  key={foto.id_foto}
-                  src={foto.image_url} 
-                  onClick={() => setActiveImage(idx)}
-                  style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '6px', cursor: 'pointer', border: activeImage === idx ? '2px solid var(--primary)' : '1px solid var(--line)' }}
-                />
-              ))}
+            ))
+          ) : (
+            <div style={{ aspectRatio: '4/5', background: 'var(--bg-soft)', borderRadius: 'var(--radius-md)', display: 'grid', placeItems: 'center' }}>
+              Sin imágenes
             </div>
           )}
-        </div>
+        </motion.div>
 
-        {/* Panel Info */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div className="card">
-            <div className="price" style={{ fontSize: '2rem', color: 'var(--primary)', marginBottom: '4px' }}>€ {Number(article.precio_base).toFixed(2)}</div>
-            <h1 style={{ fontSize: '1.3rem', margin: '0 0 12px 0' }}>{article.titulo}</h1>
-            <div className="badges" style={{ marginBottom: '20px' }}>
-              <span className="badge">{article.estado_articulo}</span>
-              <span className="badge badge--category">{article.categoria}</span>
-            </div>
-
-            {!isOwner ? (
-              <div style={{ display: 'grid', gap: '10px' }}>
-                <button className="button button--primary button--full" onClick={() => isAuthenticated ? setShowOfferModal(true) : navigate('/auth')}>
-                  Hacer oferta
+        {/* Info */}
+        <motion.div 
+          initial={{ opacity: 0, x: 20 }}
+          animate={{ opacity: 1, x: 0 }}
+          style={{ position: 'sticky', top: '112px', height: 'fit-content' }}
+        >
+          <div className="card" style={{ padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+              <div>
+                <h1 style={{ fontSize: '2.5rem', marginBottom: '8px' }}>{article.precio_base || article.precio} €</h1>
+                <div style={{ color: 'var(--text-soft)', fontSize: '1.1rem' }}>{article.titulo}</div>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '10px' }} 
+                  onClick={toggleFavorite}
+                  title="Guardar en favoritos"
+                >
+                  <Heart size={20} fill={isFavorite ? '#ef4444' : 'none'} color={isFavorite ? '#ef4444' : 'currentColor'} />
                 </button>
-                <button className="button button--secondary button--full" onClick={handleAskSeller}>
-                  Preguntar al vendedor
+                <button 
+                  className="btn btn-secondary" 
+                  style={{ padding: '10px' }}
+                  onClick={handleShare}
+                  title="Compartir artículo"
+                >
+                  <Share2 size={20} />
                 </button>
               </div>
-            ) : (
-              <button className="button button--secondary button--full" onClick={() => navigate('/perfil')}>
-                Gestionar mi artículo
-              </button>
-            )}
-          </div>
+            </div>
 
-          <div className="card">
-            <h2 style={{ fontSize: '0.9rem', marginBottom: '10px', textTransform: 'uppercase', color: 'var(--muted)' }}>Descripción</h2>
-            <p style={{ color: 'var(--text)', whiteSpace: 'pre-wrap', lineHeight: '1.5', fontSize: '0.95rem' }}>{article.descripcion}</p>
+            {/* Seller Info Section */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '12px', 
+              padding: '16px', 
+              background: 'var(--bg-soft)', 
+              borderRadius: 'var(--radius-sm)',
+              marginBottom: '24px',
+              border: '1px solid var(--line)'
+            }}>
+              <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--primary-soft)', color: 'var(--primary)', display: 'grid', placeItems: 'center' }}>
+                <User size={20} />
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-soft)', textTransform: 'uppercase', fontWeight: '700', letterSpacing: '0.05em' }}>Vendedor</div>
+                <div style={{ fontWeight: '600', color: 'var(--text)' }}>{article.vendedor_nombre}</div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '32px' }}>
+              <span className="badge badge-success">{article.estado_articulo}</span>
+              <span className="badge" style={{ background: 'var(--surface-muted)' }}>{article.categoria}</span>
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--line)', padding: '24px 0' }}>
+              <h3 style={{ fontSize: '1rem', marginBottom: '12px' }}>Descripción</h3>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', whiteSpace: 'pre-wrap' }}>
+                {article.descripcion}
+              </p>
+            </div>
+
+            <div style={{ display: 'grid', gap: '12px' }}>
+              {user?.id_usuario !== article.id_vendedor ? (
+                <>
+                  <button className="btn btn-primary" onClick={() => setSelectedOffer(article)} style={{ width: '100%', padding: '16px', borderRadius: '4px' }}>
+                    <Tag size={20} />
+                    Hacer una oferta
+                  </button>
+                  
+                  {!showChatBox ? (
+                    <button className="btn btn-secondary" onClick={() => setShowChatBox(true)} style={{ width: '100%', padding: '16px', borderRadius: '4px' }}>
+                      <MessageCircle size={20} />
+                      Enviar mensaje
+                    </button>
+                  ) : (
+                    <motion.form 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      onSubmit={handleStartChat}
+                      style={{ display: 'flex', gap: '8px' }}
+                    >
+                      <input 
+                        autoFocus
+                        className="search-input" 
+                        style={{ flex: 1, paddingLeft: '12px' }} 
+                        placeholder="Escribe tu mensaje..."
+                        value={firstMessage}
+                        onChange={(e) => setFirstMessage(e.target.value)}
+                      />
+                      <button type="submit" className="btn btn-primary" style={{ padding: '12px' }}>
+                        <Send size={20} />
+                      </button>
+                    </motion.form>
+                  )}
+                </>
+              ) : (
+                <button className="btn btn-secondary" style={{ width: '100%', padding: '16px', borderRadius: '4px' }} disabled>
+                  Es tu artículo
+                </button>
+              )}
+            </div>
+
+            <div style={{ marginTop: '24px', display: 'flex', alignItems: 'center', gap: '12px', padding: '16px', background: 'var(--primary-soft)', borderRadius: 'var(--radius-sm)', color: 'var(--primary)' }}>
+               <ShieldCheck size={24} />
+               <div style={{ fontSize: '0.85rem' }}>
+                 <strong>Compra segura.</strong> Tu dinero está protegido hasta que recibas el producto.
+               </div>
+            </div>
           </div>
-        </div>
+        </motion.div>
       </div>
 
-      {showOfferModal && (
-        <OfferModal article={article} onClose={() => setShowOfferModal(false)} onSuccess={(m) => setToast({message: m, tone: 'success'})} onError={(m) => setToast({message: m, tone: 'error'})} />
-      )}
+      <OfferModal
+        article={selectedOffer}
+        onClose={() => setSelectedOffer(null)}
+        onSuccess={(m) => setToast({ message: m, tone: 'success' })}
+        onError={(m) => setToast({ message: m, tone: 'error' })}
+      />
 
-      <Toast message={toast.message} tone={toast.tone} onClose={() => setToast({ message: '', tone: 'success' })} />
+      <Toast
+        message={toast.message}
+        tone={toast.tone}
+        onClose={() => setToast({ message: '', tone: 'success' })}
+      />
     </div>
   )
 }

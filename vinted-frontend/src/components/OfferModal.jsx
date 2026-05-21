@@ -1,10 +1,19 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import api from '../api/client'
+import { X } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 export default function OfferModal({ article, onClose, onSuccess, onError }) {
-  const [importe, setImporte] = useState(article?.importe || '')
+  const [importe, setImporte] = useState('')
   const [mensaje, setMensaje] = useState('')
   const [loading, setLoading] = useState(false)
+
+  useEffect(() => {
+    if (article) {
+      setImporte(article.precio_base || article.precio || '')
+      setMensaje('')
+    }
+  }, [article?.id_articulo, article?.id_oferta])
 
   if (!article) return null
 
@@ -18,17 +27,15 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
       setLoading(true)
       
       if (isContraoferta) {
-        // Counter-offer logic
         await api.patch(`/api/offers/${article.id_oferta}/counter-offer`, {
-          nuevo_importe: Number(importe),
-          mensaje,
+          nuevo_importe: parseFloat(importe),
+          mensaje: mensaje || undefined
         })
         onSuccess(`Contraoferta enviada correctamente.`)
       } else {
-        // New offer logic
-        const response = await api.post('/api/offers', {
+        await api.post('/api/offers', {
           id_articulo: article.id_articulo,
-          importe: Number(importe),
+          importe: parseFloat(importe),
           mensaje,
         })
         onSuccess(`Oferta enviada correctamente.`)
@@ -43,44 +50,64 @@ export default function OfferModal({ article, onClose, onSuccess, onError }) {
   }
 
   return (
-    <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal__header">
-          <div>
-            <span className="badge">{isContraoferta ? 'Contraoferta' : 'Nueva oferta'}</span>
-            <h2>{article.titulo}</h2>
+    <AnimatePresence>
+      <div className="modal-overlay" onClick={onClose}>
+        <motion.div 
+          className="modal-content" 
+          onClick={(e) => e.stopPropagation()}
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+            <div>
+              <span className="badge" style={{ background: 'var(--primary-soft)', color: 'var(--primary)', marginBottom: '8px' }}>
+                {isContraoferta ? 'Contraoferta' : 'Hacer una oferta'}
+              </span>
+              <h2 style={{ fontSize: '1.25rem' }}>{article.titulo}</h2>
+            </div>
+            <button className="btn btn-ghost" style={{ padding: '8px' }} onClick={onClose}>
+              <X size={24} />
+            </button>
           </div>
-          <button className="icon-button" onClick={onClose}>✕</button>
-        </div>
 
-        <form className="form" onSubmit={submitOffer}>
-          <label>
-            Importe {isContraoferta ? 'de la contraoferta' : 'ofertado'}
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={importe}
-              onChange={(e) => setImporte(e.target.value)}
-              required
-            />
-          </label>
+          <form onSubmit={submitOffer} style={{ display: 'grid', gap: '20px' }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '0.9rem' }}>
+                Tu precio ofertado (€)
+              </label>
+              <input
+                autoFocus
+                className="search-input"
+                style={{ paddingLeft: '16px', fontSize: '1.1rem', fontWeight: '700' }}
+                type="number"
+                min="0"
+                step="0.01"
+                value={importe}
+                onChange={(e) => setImporte(e.target.value)}
+                required
+              />
+            </div>
 
-          <label>
-            Mensaje opcional
-            <textarea
-              rows="4"
-              value={mensaje}
-              onChange={(e) => setMensaje(e.target.value)}
-              placeholder="Ejemplo: ¿Te sirve entrega esta semana?"
-            />
-          </label>
+            <div>
+              <label style={{ display: 'block', marginBottom: '8px', fontWeight: '600', fontSize: '0.9rem' }}>
+                Mensaje (opcional)
+              </label>
+              <textarea
+                className="search-input"
+                style={{ padding: '12px 16px', minHeight: '100px', resize: 'none' }}
+                value={mensaje}
+                onChange={(e) => setMensaje(e.target.value)}
+                placeholder="Ej: Hola, ¿me lo dejas por este precio?"
+              />
+            </div>
 
-          <button className="button button--primary button--full" disabled={loading}>
-            {loading ? 'Enviando...' : (isContraoferta ? 'Enviar contraoferta' : 'Confirmar oferta')}
-          </button>
-        </form>
+            <button className="btn btn-primary" style={{ width: '100%', padding: '14px', borderRadius: '4px' }} disabled={loading}>
+              {loading ? 'Enviando...' : 'Enviar oferta'}
+            </button>
+          </form>
+        </motion.div>
       </div>
-    </div>
+    </AnimatePresence>
   )
 }

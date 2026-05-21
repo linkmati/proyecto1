@@ -49,8 +49,8 @@ def list_items(
     Can be filtered by category or search text.
     """
     try:
-        # Start the query selecting items and their related photos
-        query = db.table("articulos").select("*, fotos:fotos_articulo(*)").eq("estado_articulo", "disponible")
+        # Start the query selecting items, their related photos, and seller info
+        query = db.table("articulos").select("*, fotos:fotos_articulo(*), vendedor:usuarios(nombre_usuario, email)").eq("estado_articulo", "disponible")
         
         # Apply filters if provided
         if categoria and categoria != "Todas":
@@ -62,10 +62,16 @@ def list_items(
             
         # Execute query with sorting and limit
         response = query.order("created_at", desc=True).limit(limit).execute()
-        print(f"DEBUG - list_items: Found {len(response.data)} available items")
-        if response.data:
-            print(f"DEBUG - First item sample: {response.data[0]}")
-        return response.data
+        
+        # Flatten the seller name into the response
+        results = []
+        for item in response.data:
+            v_info = item.get("vendedor")
+            if isinstance(v_info, list): v_info = v_info[0] if v_info else {}
+            item["vendedor_nombre"] = (v_info or {}).get("nombre_usuario") or (v_info or {}).get("email", "").split("@")[0] or "Vendedor"
+            results.append(item)
+            
+        return results
     
     except Exception as e:
         print(f"DEBUG - list_items error: {str(e)}")
@@ -74,15 +80,20 @@ def list_items(
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item_details(item_id: int, db: Client = Depends(get_supabase_admin)):
     """
-    Returns full details for a single item, including its photos.
+    Returns full details for a single item, including its photos and seller name.
     """
     try:
-        response = db.table("articulos").select("*, fotos:fotos_articulo(*)").eq("id_articulo", item_id).execute()
+        response = db.table("articulos").select("*, fotos:fotos_articulo(*), vendedor:usuarios(nombre_usuario, email)").eq("id_articulo", item_id).execute()
         
         if not response.data:
             raise HTTPException(status_code=404, detail="Item not found")
             
-        return response.data[0]
+        item = response.data[0]
+        v_info = item.get("vendedor")
+        if isinstance(v_info, list): v_info = v_info[0] if v_info else {}
+        item["vendedor_nombre"] = (v_info or {}).get("nombre_usuario") or (v_info or {}).get("email", "").split("@")[0] or "Vendedor"
+            
+        return item
     except Exception as e:
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=str(e))

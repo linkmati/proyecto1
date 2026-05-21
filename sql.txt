@@ -24,6 +24,7 @@ CREATE TYPE estado_incidencia_enum AS ENUM ('abierta', 'en_mediacion', 'resuelta
 CREATE TABLE usuarios (
     id_usuario UUID PRIMARY KEY, -- Sync with Supabase Auth
     email VARCHAR(255) NOT NULL UNIQUE,
+    nombre_usuario VARCHAR(100),
     estado estado_usuario_enum DEFAULT 'activo' NOT NULL,
     rol VARCHAR(20) DEFAULT 'user' NOT NULL, -- 'user' or 'admin'
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP

@@ -42,6 +42,7 @@ class PhotoResponse(BaseModel):
 class ItemResponse(ItemBase):
     id_articulo: int
     id_vendedor: str # UUID from Auth
+    vendedor_nombre: Optional[str] = None
     estado_articulo: ItemStatus
     fotos: Optional[List[PhotoResponse]] = []
     created_at: Optional[datetime] = None
@@ -52,10 +53,12 @@ class ItemResponse(ItemBase):
 class UserCreate(BaseModel):
     email: str
     password: str
+    nombre_usuario: Optional[str] = None
 
 class UserResponse(BaseModel):
     id_usuario: str # UUID
     email: str
+    nombre_usuario: Optional[str] = None
     estado: Optional[str] = "activo"
     rol: Optional[str] = "user"
     created_at: Optional[datetime] = None
@@ -82,6 +85,7 @@ class OfferResponse(BaseModel):
     mensaje: Optional[str] = None
     id_comprador: str
     id_articulo: int
+    articulo_titulo: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

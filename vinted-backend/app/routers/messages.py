@@ -96,25 +96,20 @@ def list_conversations(
     try:
         # Step 1: Fetch conversations where user is participant 1 or 2
         response = db.table("conversaciones") \
-            .select("*, articulos(titulo), usuario1:usuarios!id_usuario_1(email), usuario2:usuarios!id_usuario_2(email)") \
+            .select("*, articulos(titulo), usuario1:usuarios!id_usuario_1(nombre_usuario, email), usuario2:usuarios!id_usuario_2(nombre_usuario, email)") \
             .or_(f"id_usuario_1.eq.{user_id},id_usuario_2.eq.{user_id}") \
             .execute()
         
         print(f"DEBUG - list_conversations: Found {len(response.data)} raw conversations")
-        
-        # Step 2: Get unread counts and last activity for all relevant conversations in fewer calls
-        # (For now, we'll keep the loop but make it more robust)
         
         formatted_list = []
         for conv in response.data:
             try:
                 conv_id = conv["id_conversacion"]
                 
-                # Fetch last message and unread count in parallel or more efficiently if possible
-                # But staying with sequential for now for stability, adding safety
-                
+                # Fetch last message and unread count
                 last_msg_res = db.table("mensajes") \
-                    .select("created_at") \
+                    .select("contenido, created_at") \
                     .eq("id_conversacion", conv_id) \
                     .order("created_at", desc=True) \
                     .limit(1) \
@@ -130,21 +125,24 @@ def list_conversations(
                 # Identify the other person safely
                 is_user_1 = str(conv["id_usuario_1"]) == str(user_id)
                 
-                # Join safety: handle case where user1/user2 might be a list or missing
-                def get_email(user_data):
-                    if not user_data: return "desconocido@vinted.com"
-                    if isinstance(user_data, list): return user_data[0].get("email", "desconocido@vinted.com")
-                    return user_data.get("email", "desconocido@vinted.com")
+                def get_user_info(user_data):
+                    if not user_data: return {"nombre_usuario": "Usuario", "email": ""}
+                    if isinstance(user_data, list): user_data = user_data[0]
+                    return {
+                        "nombre": user_data.get("nombre_usuario") or user_data.get("email", "").split("@")[0] or "Usuario",
+                        "email": user_data.get("email", "")
+                    }
                 
-                u1_email = get_email(conv.get("usuario1"))
-                u2_email = get_email(conv.get("usuario2"))
+                u1_info = get_user_info(conv.get("usuario1"))
+                u2_info = get_user_info(conv.get("usuario2"))
                 
                 art_data = conv.get("articulos")
                 if isinstance(art_data, list): art_data = art_data[0] if art_data else {}
                 item_title = (art_data or {}).get("titulo", "Artículo no disponible")
                 
-                other_email = u2_email if is_user_1 else u1_email
+                other_user = u2_info if is_user_1 else u1_info
                 activity_time = last_msg_res.data[0]["created_at"] if last_msg_res.data else conv["created_at"]
+                last_text = last_msg_res.data[0]["contenido"] if last_msg_res.data else "Sin mensajes"
 
                 item_to_add = {
                     "id_conversacion": conv_id,
@@ -152,7 +150,8 @@ def list_conversations(
                     "id_usuario_1": conv["id_usuario_1"],
                     "id_usuario_2": conv["id_usuario_2"],
                     "item_title": item_title,
-                    "other_user_name": other_email.split("@")[0],
+                    "other_user_name": other_user["nombre"],
+                    "last_message": last_text,
                     "unread_count": unread_res.count or 0,
                     "last_activity": activity_time
                 }
@@ -169,22 +168,35 @@ def list_conversations(
         print(f"DEBUG - list_conversations top-level error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/conversations/{conversation_id}/messages", response_model=List[MessageResponse])
+@router.get("/conversations/{conversation_id}/messages", response_model=Dict)
 async def list_conversation_messages(
     conversation_id: int,
     db: Client = Depends(get_supabase_admin),
-    # Participant check
     conversation: dict = Depends(verify_conversation_participant)
 ):
     """
-    Returns all messages for a specific conversation.
+    Returns all messages for a specific conversation and any active offer linked to the item.
     """
     try:
-        response = db.table("mensajes").select("*") \
+        # Fetch Messages
+        msg_res = db.table("mensajes").select("*") \
             .eq("id_conversacion", conversation_id) \
             .order("id_mensaje", desc=False) \
             .execute()
-        return response.data
+        
+        # Fetch related offer (active offer for this item and these users)
+        offer_res = db.table("ofertas") \
+            .select("*") \
+            .eq("id_articulo", conversation["id_articulo"]) \
+            .in_("id_comprador", [conversation["id_usuario_1"], conversation["id_usuario_2"]]) \
+            .order("updated_at", desc=True) \
+            .limit(1) \
+            .execute()
+            
+        return {
+            "messages": msg_res.data,
+            "offer": offer_res.data[0] if offer_res.data else None
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

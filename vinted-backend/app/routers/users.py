@@ -38,6 +38,34 @@ def get_my_items(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching your items: {str(e)}")
 
+@router.get("/me/favorites", response_model=List[ItemResponse])
+def get_my_favorited_items(
+    db: Client = Depends(get_supabase_admin),
+    user_id: str = Depends(get_current_user)
+):
+    """
+    Returns the complete list of items that the current user has marked as favorites.
+    """
+    try:
+        response = db.table("favoritos") \
+            .select("id_articulo, articulos(*, fotos:fotos_articulo(*))") \
+            .eq("id_usuario", user_id) \
+            .execute()
+            
+        # Extract and flatten the items from the join response
+        favorited_items = []
+        for fav in response.data:
+            if fav.get("articulos"):
+                item = fav["articulos"]
+                # Ensure it's not a list (sometimes happens with Supabase joins if not specified correctly)
+                if isinstance(item, list): item = item[0] if item else None
+                if item: favorited_items.append(item)
+                
+        return favorited_items
+    except Exception as e:
+        print(f"DEBUG - get_my_favorited_items error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error fetching favorited items")
+
 @router.get("/me/purchases", response_model=List[OrderResponse])
 def get_my_purchases(
     db: Client = Depends(get_supabase_admin),
