@@ -3,12 +3,12 @@ from typing import Optional, List
 from datetime import datetime
 from enum import Enum
 
-# --- Enums (Categories and States) ---
+# --- Enums (Los estados que pueden tener los trastos) ---
 
 class ItemStatus(str, Enum):
     """
-    Defines the possible states of an item. 
-    Using an Enum prevents typos and makes the code more robust.
+    Aquí definimos los estados de un producto. 
+    Usamos un Enum para no equivocarnos al escribir y que el código no pete.
     """
     available = "disponible"
     reserved = "reservado"
@@ -16,7 +16,7 @@ class ItemStatus(str, Enum):
     deactivated = "desactivado"
     deleted = "eliminado"
 
-# --- Item Schemas ---
+# --- Esquemas de los Artículos ---
 
 class ItemBase(BaseModel):
     titulo: str
@@ -41,14 +41,14 @@ class PhotoResponse(BaseModel):
 
 class ItemResponse(ItemBase):
     id_articulo: int
-    id_vendedor: str # UUID from Auth
+    id_vendedor: str # El ID raro que nos da Supabase
     vendedor_nombre: Optional[str] = None
     estado_articulo: ItemStatus
     fotos: Optional[List[PhotoResponse]] = []
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-# --- Auth / User Schemas ---
+# --- Esquemas de Usuarios y Auth ---
 
 class UserCreate(BaseModel):
     email: str
@@ -56,7 +56,7 @@ class UserCreate(BaseModel):
     nombre_usuario: Optional[str] = None
 
 class UserResponse(BaseModel):
-    id_usuario: str # UUID
+    id_usuario: str # El UUID (ID largo y raro)
     email: str
     nombre_usuario: Optional[str] = None
     estado: Optional[str] = "activo"
@@ -67,7 +67,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
 
-# --- Offer Schemas ---
+# --- Esquemas de Ofertas ---
 
 class OfferCreate(BaseModel):
     id_articulo: int
@@ -89,7 +89,7 @@ class OfferResponse(BaseModel):
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
-# --- Message Schemas ---
+# --- Esquemas de Mensajes ---
 
 class ConversationResponse(BaseModel):
     id_conversacion: int
@@ -111,7 +111,7 @@ class MessageResponse(BaseModel):
     leido: bool
     created_at: Optional[datetime] = None
 
-# --- Favorite / Order Schemas ---
+# --- Esquemas de Favoritos y Pedidos ---
 
 class FavoriteResponse(BaseModel):
     id_favorito: int
@@ -126,3 +126,4 @@ class OrderResponse(BaseModel):
     estado_pedido: str
     precio_final: float
     created_at: Optional[datetime] = None
+    articulo: Optional[ItemResponse] = None

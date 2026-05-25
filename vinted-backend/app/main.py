@@ -6,7 +6,7 @@ from app.routers import items, auth, offers, users, messages, favorites, admin
 
 app = FastAPI(title="Vinted Clone API")
 
-# Configure CORS - Broad policy for local network/dev access
+# Aquí configuramos el CORS para que la web pueda hablar con el servidor sin que el navegador nos bloquee
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +16,7 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Connect the routers to the app
+# Metemos todos los archivos de rutas para que el servidor sepa qué hacer cuando entramos en /api/...
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(items.router)
@@ -36,17 +36,18 @@ def health_check(
     db: Client = Depends(get_supabase),
     admin_db: Client = Depends(get_supabase_admin)
 ):
+    # Esto es solo para ver si el servidor y la base de datos están vivos
     results = {"status": "online"}
     
     try:
-        # Check regular client (subject to RLS)
+        # Probamos si la base de datos normal responde
         db.table("usuarios").select("id_usuario").limit(1).execute()
         results["database_rls"] = "connected"
     except Exception as e:
-        results["database_rls"] = f"error (likely RLS): {str(e)}"
+        results["database_rls"] = f"error (seguro que es por el RLS): {str(e)}"
         
     try:
-        # Check admin client (bypasses RLS)
+        # Probamos con el admin, que se salta todas las reglas de seguridad
         admin_db.table("usuarios").select("id_usuario").limit(1).execute()
         results["database_admin"] = "connected"
     except Exception as e:

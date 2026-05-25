@@ -4,7 +4,7 @@ from supabase import Client
 from app.db.supabase import get_supabase, get_supabase_admin
 from app.models.schemas import UserCreate, TokenResponse
 
-# We use "Auth" as the tag to group these routes in the automatic documentation (Swagger)
+# Usamos "Auth" para que en la web de documentación (Swagger) salga todo juntito
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
 @router.post("/register")
@@ -14,18 +14,18 @@ def register_user(
     admin_db: Client = Depends(get_supabase_admin)
 ):
     """
-    Handles new user registration. 
-    It creates the user in Supabase Auth and then syncs the profile to our public table.
+    Aquí es donde se apunta la gente nueva. 
+    Primero crea el usuario en Supabase (lo de la contraseña y eso) y luego lo guardamos en nuestra tabla de usuarios.
     """
     try:
-        # Step 1: Attempt to register the user in Supabase Authentication
-        # This part handles the email and password securely
+        # Paso 1: Intentamos registrar al usuario en Supabase
+        # Esto guarda el email y la pass de forma segura
         auth_response = db.auth.sign_up({
             "email": user_data.email,
             "password": user_data.password
         })
         
-        # If Supabase doesn't return a user object, something went wrong
+        # Si Supabase no nos devuelve un usuario, es que algo ha fallado
         if not auth_response.user:
             raise HTTPException(
                 status_code=400, 
@@ -34,9 +34,8 @@ def register_user(
 
         new_user_id = auth_response.user.id
 
-        # Step 2: Sync user data with our custom 'usuarios' table
-        # We use 'admin_db' here because it bypasses safety rules (RLS), 
-        # allowing us to create the profile even before the user logs in fully.
+        # Paso 2: Guardamos los datos en nuestra propia tabla 'usuarios'
+        # Usamos 'admin_db' porque así nos saltamos las reglas de seguridad y nos deja crear el perfil
         admin_db.table("usuarios").upsert({
             "id_usuario": new_user_id,
             "email": user_data.email,
@@ -50,14 +49,14 @@ def register_user(
         }
         
     except Exception as error:
-        # We log the error in the console and send a friendly message to the student/client
+        # Imprimimos el error por consola por si tenemos que debugear y le mandamos algo al usuario
         print(f"DEBUG - Registration Error: {str(error)}")
         
-        # If it's already an HTTPException, we just re-raise it
+        # Si ya es un error de los nuestros (HTTPException), lo soltamos tal cual
         if isinstance(error, HTTPException):
             raise error
             
-        # For any other unexpected error, we send a 400 Bad Request
+        # Para cualquier otra cosa rara, soltamos un error 400
         raise HTTPException(status_code=400, detail=str(error))
 
 @router.post("/login", response_model=TokenResponse)
@@ -67,11 +66,11 @@ def login_user(
     admin_db: Client = Depends(get_supabase_admin)
 ):
     """
-    Authenticates a user and returns a token.
-    FastAPI's OAuth2PasswordRequestForm expects 'username' (which is the email) and 'password'.
+    Para entrar en la cuenta. Nos da un token que es como el carnet para hacer cosas luego.
+    El formulario este de FastAPI pide 'username' (que es el email) y 'password'.
     """
     try:
-        # Step 1: Sign in with email and password
+        # Paso 1: Entrar con el email y la pass
         auth_response = db.auth.sign_in_with_password({
             "email": form_data.username, 
             "password": form_data.password
@@ -80,9 +79,8 @@ def login_user(
         if not auth_response.user:
             raise HTTPException(status_code=401, detail="Invalid email or password.")
 
-        # Step 2: Ensure the user profile exists and check status (Security Check)
-        # We fetch the profile first. If it doesn't exist, we don't allow login
-        # because the user might have been deleted from our database.
+        # Paso 2: Miramos si el usuario de verdad existe en nuestra tabla
+        # Si no está ahí, es que algo raro ha pasado o lo han borrado.
         profile_res = admin_db.table("usuarios").select("*").eq("id_usuario", auth_response.user.id).execute()
         
         if not profile_res.data:
@@ -97,12 +95,12 @@ def login_user(
                 detail="Tu cuenta ha sido suspendida. Contacta con soporte para más información."
             )
 
-        # Update last login or just ensure email is synced
+        # Actualizamos el email por si acaso
         admin_db.table("usuarios").update({
             "email": auth_response.user.email
         }).eq("id_usuario", auth_response.user.id).execute()
         
-        # Step 3: Return the access token needed for future requests
+        # Paso 3: Devolvemos el token que se usará para las demás peticiones
         return {
             "access_token": auth_response.session.access_token, 
             "token_type": "bearer"
@@ -110,4 +108,9 @@ def login_user(
         
     except Exception as error:
         print(f"DEBUG - Login Error: {str(error)}")
-        raise HTTPException(status_code=401, detail="Could not authenticate user. Check credentials.")
+        # Si el error viene de Supabase Auth, intentamos pasar el mensaje real
+        error_msg = str(error)
+        if "Invalid login credentials" in error_msg:
+            raise HTTPException(status_code=401, detail="Email o contraseña incorrectos.")
+        
+        raise HTTPException(status_code=401, detail=f"Error en la autenticación: {error_msg}")

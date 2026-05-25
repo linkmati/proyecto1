@@ -3,11 +3,11 @@ from supabase import Client
 from typing import List, Optional
 from app.db.supabase import get_supabase, get_supabase_admin
 from app.core.security import get_admin_user
-from app.models.schemas import ItemResponse, UserResponse, OfferResponse
+from app.models.schemas import ItemResponse, UserResponse, OfferResponse, ItemUpdate
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
-# --- Products Management ---
+# --- Gestión de Productos (Cosas de Admin) ---
 
 @router.get("/items", response_model=List[ItemResponse])
 def get_all_items(
@@ -16,16 +16,18 @@ def get_all_items(
     search: Optional[str] = None
 ):
     """
-    Returns all items in the platform. Supports optional search by title.
+    Saca absolutamente todos los productos que hay en la app. 
+    Puedes buscar por el título si quieres encontrar algo rápido.
     """
     try:
+        # Buscamos los productos, sus fotos y quién los vende
         query = db.table("articulos").select("*, fotos:fotos_articulo(*), vendedor:usuarios(nombre_usuario, email)")
         if search:
             query = query.ilike("titulo", f"%{search}%")
         
         response = query.order("created_at", desc=True).execute()
         
-        # Flatten the seller name into the response
+        # Apañamos los nombres de los vendedores para que queden bien
         results = []
         for item in response.data:
             v_info = item.get("vendedor")
@@ -44,7 +46,7 @@ def delete_item(
     admin_id: str = Depends(get_admin_user)
 ):
     """
-    Deletes an item from the platform.
+    Para borrar un producto de la app para siempre.
     """
     try:
         db.table("articulos").delete().eq("id_articulo", item_id).execute()
@@ -52,7 +54,26 @@ def delete_item(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Users Management ---
+@router.patch("/items/{item_id}/category")
+def update_item_category(
+    item_id: int,
+    item_data: ItemUpdate,
+    db: Client = Depends(get_supabase_admin),
+    admin_id: str = Depends(get_admin_user)
+):
+    """
+    Para cambiarle la categoría a un producto (por si el usuario se ha equivocado).
+    """
+    try:
+        if not item_data.categoria:
+            raise HTTPException(status_code=400, detail="Category is required")
+            
+        db.table("articulos").update({"categoria": item_data.categoria}).eq("id_articulo", item_id).execute()
+        return {"message": f"Category of item {item_id} updated to {item_data.categoria}"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- Gestión de Usuarios ---
 
 @router.get("/users", response_model=List[UserResponse])
 def get_all_users(
@@ -61,7 +82,7 @@ def get_all_users(
     search: Optional[str] = None
 ):
     """
-    Returns all registered users.
+    Saca la lista de toda la gente que se ha registrado.
     """
     try:
         query = db.table("usuarios").select("*")
@@ -82,7 +103,7 @@ def suspend_user(
     admin_id: str = Depends(get_admin_user)
 ):
     """
-    Suspends a user account.
+    Para banear a un usuario. Le pone el estado en 'suspendido'.
     """
     try:
         db.table("usuarios").update({"estado": "suspendido"}).eq("id_usuario", user_id).execute()
@@ -97,7 +118,7 @@ def reactivate_user(
     admin_id: str = Depends(get_admin_user)
 ):
     """
-    Reactivates a suspended user account.
+    Para quitarle el baneo a un usuario. Vuelve a estar 'activo'.
     """
     try:
         db.table("usuarios").update({"estado": "activo"}).eq("id_usuario", user_id).execute()
@@ -112,8 +133,8 @@ def delete_user(
     admin_id: str = Depends(get_admin_user)
 ):
     """
-    Deletes a user account. Note: This only deletes from our 'usuarios' table.
-    Deleting from Supabase Auth requires admin client and usually handled via dashboard or separate logic.
+    Borra a un usuario de nuestra tabla. 
+    Ojo, que en Supabase Auth todavía seguirá estando, pero aquí ya no.
     """
     try:
         db.table("usuarios").delete().eq("id_usuario", user_id).execute()
@@ -121,7 +142,7 @@ def delete_user(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# --- Offers Management ---
+# --- Gestión de Ofertas ---
 
 @router.get("/offers", response_model=List[OfferResponse])
 def get_all_offers(
@@ -129,7 +150,7 @@ def get_all_offers(
     admin_id: str = Depends(get_admin_user)
 ):
     """
-    Returns all offers.
+    Saca todas las ofertas que se han hecho en la app.
     """
     try:
         response = db.table("ofertas").select("*, articulos(titulo)").order("created_at", desc=True).execute()
@@ -152,7 +173,7 @@ def delete_offer(
     admin_id: str = Depends(get_admin_user)
 ):
     """
-    Deletes an offer.
+    Para borrar una oferta.
     """
     try:
         db.table("ofertas").delete().eq("id_oferta", offer_id).execute()

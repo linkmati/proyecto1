@@ -1,22 +1,22 @@
 from supabase import create_client, Client
 from app.core.config import settings
 
-# Standard client (Respects Row Level Security)
+# Este es el cliente normal, el que obedece las reglas de seguridad (RLS)
 supabase_client: Client = create_client(
     settings.SUPABASE_URL, 
     settings.SUPABASE_PUBLISHABLE_KEY
 )
 
-# Admin client (Bypasses Row Level Security - use carefully!)
+# Este es el cliente admin, se salta todas las reglas. ¡Usar con mucho cuidado!
 supabase_admin: Client = create_client(
     settings.SUPABASE_URL, 
     settings.SUPABASE_SECRET_KEY
 )
 
-# Dependency for standard endpoints
+# Esto es para que FastAPI pueda pillar el cliente normal cuando lo necesite
 def get_supabase() -> Client:
     return supabase_client
 
-# Dependency for admin/internal endpoints
+# Esto es para pillar el cliente admin (el que manda de verdad)
 def get_supabase_admin() -> Client:
     return supabase_admin

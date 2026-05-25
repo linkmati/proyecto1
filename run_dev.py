@@ -56,13 +56,13 @@ def main():
         if public_url:
             break
         if i % 5 == 0:
-            print(f"⏳ [SYSTEM] Esperando ngrok ({i}/15)...")
+            print(f"[SYSTEM] Esperando ngrok ({i}/15)...")
 
     if public_url:
-        print(f"✅ [SYSTEM] Web pública lista: {public_url}")
-        print(f"🔗 [SYSTEM] Abre esta URL en tu navegador.")
+        print(f"[SYSTEM] Web pública lista: {public_url}")
+        print(f"[SYSTEM] Abre esta URL en tu navegador.")
     else:
-        print("⚠️ [SYSTEM] No se pudo obtener URL de ngrok. Usando modo local.")
+        print("[SYSTEM] No se pudo obtener URL de ngrok. Usando modo local.")
 
     # Backend
     backend_cmd = [sys.executable, "-m", "uvicorn", "app.main:app", "--reload"]

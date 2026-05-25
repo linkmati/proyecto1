@@ -7,11 +7,11 @@ from app.models.schemas import MessageCreate, MessageResponse
 
 router = APIRouter(prefix="/api/messages", tags=["Messages"])
 
-# --- Internal Helpers (Dependencies) ---
+# --- Cosas internas (para no repetir código) ---
 
 async def get_conversation_or_404(conversation_id: int, db: Client = Depends(get_supabase_admin)):
     """
-    Helper to fetch a conversation and ensure it exists.
+    Busca una conversación y si no existe suelta un error 404.
     """
     response = db.table("conversaciones").select("*").eq("id_conversacion", conversation_id).execute()
     if not response.data:
@@ -24,14 +24,15 @@ async def verify_conversation_participant(
     db: Client = Depends(get_supabase_admin)
 ):
     """
-    Security check: Ensures the user is part of the conversation.
+    Seguridad: mira si el usuario de verdad está en el chat.
+    Si intentas leer los mensajes de otros, te echa.
     """
     conversation = await get_conversation_or_404(conversation_id, db)
     if user_id not in [conversation["id_usuario_1"], conversation["id_usuario_2"]]:
         raise HTTPException(status_code=403, detail="You are not a participant in this conversation")
     return conversation
 
-# --- API Routes ---
+# --- Rutas de la API ---
 
 @router.post("", response_model=MessageResponse)
 async def send_message(
@@ -40,19 +41,18 @@ async def send_message(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Sends a message. Creates a conversation if it doesn't already exist.
+    Para mandar un mensaje. Si es la primera vez que hablas por ese producto, crea el chat solo.
     """
     try:
-        # 1. Verify item exists and get seller ID
+        # 1. Miramos que el producto exista para saber quién es el vendedor
         item_res = db.table("articulos").select("id_vendedor").eq("id_articulo", message_data.id_articulo).execute()
         if not item_res.data:
             raise HTTPException(status_code=404, detail="Item not found")
         
-        # 2. Setup participants (sorted to ensure unique conversation per item/users)
+        # 2. Ordenamos los IDs de los usuarios para que el chat sea único siempre
         u1, u2 = sorted([user_id, message_data.id_destinatario])
         
-        # 3. Find or Create Conversation
-        # We use db (admin) to handle conversation creation safely
+        # 3. Buscamos si ya existe el chat, si no lo creamos
         conv_res = db.table("conversaciones").select("id_conversacion") \
             .eq("id_usuario_1", u1) \
             .eq("id_usuario_2", u2) \
@@ -69,7 +69,7 @@ async def send_message(
         else:
             conversation_id = conv_res.data[0]["id_conversacion"]
 
-        # 4. Save the Message
+        # 4. Guardamos el mensaje en la base de datos
         new_message = {
             "id_conversacion": conversation_id,
             "id_emisor": user_id,
@@ -90,11 +90,11 @@ def list_conversations(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Lists all conversations for the current user with unread counts and latest activity.
+    Saca todos los chats que tienes abiertos, con el último mensaje y cuántos tienes sin leer.
     """
     print(f"DEBUG - list_conversations START for user {user_id}")
     try:
-        # Step 1: Fetch conversations where user is participant 1 or 2
+        # Paso 1: Buscamos las conversaciones donde estemos nosotros
         response = db.table("conversaciones") \
             .select("*, articulos(titulo), usuario1:usuarios!id_usuario_1(nombre_usuario, email), usuario2:usuarios!id_usuario_2(nombre_usuario, email)") \
             .or_(f"id_usuario_1.eq.{user_id},id_usuario_2.eq.{user_id}") \
@@ -107,7 +107,7 @@ def list_conversations(
             try:
                 conv_id = conv["id_conversacion"]
                 
-                # Fetch last message and unread count
+                # Pillamos el último mensaje para ponerlo en la lista y los sin leer
                 last_msg_res = db.table("mensajes") \
                     .select("contenido, created_at") \
                     .eq("id_conversacion", conv_id) \
@@ -122,7 +122,7 @@ def list_conversations(
                     .eq("leido", False) \
                     .execute()
 
-                # Identify the other person safely
+                # Miramos quién es la otra persona para poner su nombre
                 is_user_1 = str(conv["id_usuario_1"]) == str(user_id)
                 
                 def get_user_info(user_data):
@@ -161,6 +161,7 @@ def list_conversations(
                 print(f"DEBUG - Error in conversation loop for {conv.get('id_conversacion')}: {loop_err}")
                 continue
         
+        # Ordenamos para que los chats más nuevos salgan arriba
         formatted_list.sort(key=lambda x: x["last_activity"], reverse=True)
         return formatted_list
 
@@ -175,16 +176,16 @@ async def list_conversation_messages(
     conversation: dict = Depends(verify_conversation_participant)
 ):
     """
-    Returns all messages for a specific conversation and any active offer linked to the item.
+    Saca todos los mensajes de un chat y si hay alguna oferta activa por el medio.
     """
     try:
-        # Fetch Messages
+        # Pillamos los mensajes del chat
         msg_res = db.table("mensajes").select("*") \
             .eq("id_conversacion", conversation_id) \
             .order("id_mensaje", desc=False) \
             .execute()
         
-        # Fetch related offer (active offer for this item and these users)
+        # También buscamos si hay ofertas para que salgan en el chat
         offer_res = db.table("ofertas") \
             .select("*") \
             .eq("id_articulo", conversation["id_articulo"]) \
@@ -205,11 +206,11 @@ async def mark_conversation_as_read(
     conversation_id: int,
     admin_db: Client = Depends(get_supabase_admin),
     user_id: str = Depends(get_current_user),
-    # Participant check
+    # Miramos que estés en el chat
     conversation: dict = Depends(verify_conversation_participant)
 ):
     """
-    Marks all messages in a conversation as read (except those sent by the current user).
+    Marca todos los mensajes del chat como leídos (menos los que has mandado tú, claro).
     """
     try:
         admin_db.table("mensajes") \
@@ -227,10 +228,10 @@ def get_total_unread_count(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Returns the total number of unread messages across all conversations.
+    Te dice cuántos mensajes tienes sin leer en total en toda la app.
     """
     try:
-        # 1. Get IDs of all conversations the user is in
+        # 1. Pillamos los IDs de todos tus chats
         convs = db.table("conversaciones") \
             .select("id_conversacion") \
             .or_(f"id_usuario_1.eq.{user_id},id_usuario_2.eq.{user_id}") \
@@ -241,7 +242,7 @@ def get_total_unread_count(
             
         conversation_ids = [c["id_conversacion"] for c in convs.data]
         
-        # 2. Count unread messages in those conversations where sender is NOT the current user
+        # 2. Contamos cuántos mensajes hay sin leer donde tú no seas el que lo mandó
         msg_res = db.table("mensajes") \
             .select("id_mensaje", count="exact") \
             .in_("id_conversacion", conversation_ids) \

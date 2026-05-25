@@ -63,6 +63,23 @@ export default function AdminPage() {
     }
   }
 
+  const handleCategoryChange = async (itemId, currentCategory) => {
+    const CATEGORIAS = ['Moda', 'Hogar', 'Electrónica', 'Entretenimiento', 'Otros']
+    const newCategory = window.prompt(`Cambiar categoría (Actual: ${currentCategory}).\nOpciones: ${CATEGORIAS.join(', ')}`, currentCategory)
+    
+    if (newCategory && CATEGORIAS.includes(newCategory) && newCategory !== currentCategory) {
+      try {
+        await api.patch(`/api/admin/items/${itemId}/category`, { categoria: newCategory })
+        setToast({ message: 'Categoría actualizada con éxito', tone: 'success' })
+        loadData()
+      } catch (e) {
+        setToast({ message: 'Error al actualizar la categoría', tone: 'error' })
+      }
+    } else if (newCategory && !CATEGORIAS.includes(newCategory)) {
+      alert('Categoría no válida. Debe ser una de: ' + CATEGORIAS.join(', '))
+    }
+  }
+
   if (user?.rol !== 'admin') {
     return (
       <div className="container" style={{ padding: '100px 0', textAlign: 'center' }}>
@@ -125,6 +142,7 @@ export default function AdminPage() {
               {activeTab === 'items' && (
                 <>
                   <th style={{ padding: '16px 24px' }}>Título</th>
+                  <th style={{ padding: '16px 24px' }}>Categoría</th>
                   <th style={{ padding: '16px 24px' }}>Precio</th>
                   <th style={{ padding: '16px 24px' }}>Vendedor</th>
                   <th style={{ padding: '16px 24px' }}>Acciones</th>
@@ -192,6 +210,15 @@ export default function AdminPage() {
                   {activeTab === 'items' && (
                     <>
                       <td style={{ padding: '16px 24px', fontWeight: '600' }}>{item.titulo}</td>
+                      <td style={{ padding: '16px 24px' }}>
+                        <button 
+                          className="btn btn-ghost" 
+                          style={{ padding: '4px 8px', fontSize: '0.8rem', gap: '4px' }}
+                          onClick={() => handleCategoryChange(item.id_articulo, item.categoria)}
+                        >
+                          <Tag size={14} /> {item.categoria}
+                        </button>
+                      </td>
                       <td style={{ padding: '16px 24px' }}>{item.precio_base || item.precio} €</td>
                       <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{item.vendedor_nombre}</td>
                       <td style={{ padding: '16px 24px' }}>

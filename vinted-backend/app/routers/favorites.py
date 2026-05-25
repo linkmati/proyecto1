@@ -13,18 +13,17 @@ def list_my_favorites(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Returns a list of items that the user has marked as favorites.
-    Includes item photos and details.
+    Saca una lista con todos los productos que has guardado como favoritos.
+    Viene con las fotos y todo el detalle.
     """
     try:
-        # We use admin_db to ensure we can join tables smoothly
+        # Usamos el admin_db para que nos deje juntar las tablas sin dar errores de permisos
         response = admin_db.table("favoritos") \
             .select("*, articulos(*, fotos:fotos_articulo(*))") \
             .eq("id_usuario", user_id) \
             .execute()
             
-        # Clean the response to return only the item data
-        # We skip any favorite that doesn't have a valid linked item
+        # Limpiamos un poco lo que nos devuelve la base de datos para que solo salgan los productos
         return [fav["articulos"] for fav in response.data if fav.get("articulos")]
         
     except Exception as e:
@@ -38,8 +37,8 @@ def add_to_favorites(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Adds an item to the user's favorites list. 
-    If it's already a favorite, it simply updates the record (upsert).
+    Para guardar un producto en favoritos. 
+    Si ya lo tenías, pues no pasa nada, lo vuelve a guardar encima.
     """
     try:
         admin_db.table("favoritos").upsert({
@@ -60,7 +59,7 @@ def remove_from_favorites(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Removes an item from the user's favorites list.
+    Para quitar un producto de tu lista de favoritos.
     """
     try:
         admin_db.table("favoritos") \

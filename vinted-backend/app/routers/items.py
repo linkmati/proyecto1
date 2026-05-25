@@ -13,8 +13,8 @@ router = APIRouter(
 
 async def get_item_or_404(item_id: int, db: Client = Depends(get_supabase_admin)):
     """
-    Helper function to fetch an item and ensure it exists.
-    If it doesn't exist, it stops the request and returns a 404 error.
+    Esta función es para no repetir código todo el rato.
+    Busca un producto y si no lo encuentra, para todo y suelta un error 404.
     """
     response = db.table("articulos").select("*").eq("id_articulo", item_id).execute()
     if not response.data:
@@ -27,15 +27,15 @@ async def verify_item_ownership(
     db: Client = Depends(get_supabase_admin)
 ):
     """
-    Security check: Ensures the logged-in user is the owner of the item.
-    Reuses 'get_item_or_404' logic implicitly by checking the result.
+    Cuidado: aquí miramos que el que está tocando el producto sea el dueño.
+    Si intentas editar algo de otro, te echa con un error 403.
     """
     item = await get_item_or_404(item_id, db)
     if item["id_vendedor"] != current_user_id:
         raise HTTPException(status_code=403, detail="You don't have permission to modify this item")
     return item
 
-# --- API Routes ---
+# --- Rutas de la API ---
 
 @router.get("", response_model=List[ItemResponse])
 def list_items(
@@ -45,25 +45,25 @@ def list_items(
     db: Client = Depends(get_supabase_admin)
 ):
     """
-    Returns a list of available items. 
-    Can be filtered by category or search text.
+    Saca una lista de todos los trastos que hay a la venta.
+    Puedes filtrar por categoría o buscar algo por el nombre.
     """
     try:
-        # Start the query selecting items, their related photos, and seller info
+        # Empezamos buscando los artículos que estén disponibles (que no se hayan vendido)
         query = db.table("articulos").select("*, fotos:fotos_articulo(*), vendedor:usuarios(nombre_usuario, email)").eq("estado_articulo", "disponible")
         
-        # Apply filters if provided
+        # Si nos han pasado una categoría, filtramos por ella
         if categoria and categoria != "Todas":
             query = query.eq("categoria", categoria)
             
         if search:
-            # Look for matches in title OR description
+            # Si hay algo en el buscador, lo miramos en el título o en la descripción
             query = query.or_(f"titulo.ilike.%{search}%,descripcion.ilike.%{search}%")
             
-        # Execute query with sorting and limit
+        # Ordenamos por los más nuevos y ponemos un límite para no petar la base de datos
         response = query.order("created_at", desc=True).limit(limit).execute()
         
-        # Flatten the seller name into the response
+        # Aquí hacemos un apaño para poner el nombre del vendedor bien
         results = []
         for item in response.data:
             v_info = item.get("vendedor")
@@ -80,7 +80,7 @@ def list_items(
 @router.get("/{item_id}", response_model=ItemResponse)
 def get_item_details(item_id: int, db: Client = Depends(get_supabase_admin)):
     """
-    Returns full details for a single item, including its photos and seller name.
+    Para ver toda la info de un solo producto, con sus fotos y quién lo vende.
     """
     try:
         response = db.table("articulos").select("*, fotos:fotos_articulo(*), vendedor:usuarios(nombre_usuario, email)").eq("id_articulo", item_id).execute()
@@ -105,10 +105,10 @@ def create_item(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Creates a new item listing for the logged-in user.
+    Esto es para poner algo a la venta.
     """
     try:
-        # Convert Pydantic model to a Python dictionary and add the seller ID
+        # Pasamos lo que nos llega a un diccionario y le pegamos el ID del usuario que está logueado
         new_item = item_data.model_dump()
         new_item["id_vendedor"] = user_id 
         
@@ -117,7 +117,7 @@ def create_item(
         if not response.data:
             raise HTTPException(status_code=400, detail="Failed to create item")
             
-        # Return the created item with an empty list for photos
+        # Devolvemos el producto creado, al principio no tiene fotos claro
         return {**response.data[0], "fotos": []}
     
     except Exception as e:
@@ -128,22 +128,22 @@ async def update_item(
     item_id: int, 
     update_data: ItemUpdate,
     db: Client = Depends(get_supabase_admin),
-    # This dependency automatically checks if the user owns the item!
+    # ¡Aquí el Depends este ya comprueba si el usuario es el dueño! Magia.
     item: dict = Depends(verify_item_ownership)
 ):
     """
-    Updates an existing item's information.
+    Para cambiar cosas de un producto que ya hemos subido.
     """
     try:
-        # Get only the fields that were actually provided in the request
+        # Cogemos solo las cosas que han cambiado de verdad
         data_to_update = update_data.model_dump(exclude_unset=True)
         if not data_to_update:
             raise HTTPException(status_code=400, detail="No fields provided for update")
 
-        # Perform the update
+        # Guardamos los cambios
         response = db.table("articulos").update(data_to_update).eq("id_articulo", item_id).execute()
         
-        # Fetch current photos to return a complete response object
+        # Volvemos a pillar las fotos para devolverlo todo completito
         photos_res = db.table("fotos_articulo").select("*").eq("id_articulo", item_id).execute()
         
         return {**response.data[0], "fotos": photos_res.data}
@@ -153,47 +153,49 @@ async def update_item(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{item_id}")
-async def deactivate_item(
+async def delete_item(
     item_id: int,
     db: Client = Depends(get_supabase_admin),
-    # Security check included here
+    # También comprobamos aquí que seas el dueño
     item: dict = Depends(verify_item_ownership)
 ):
     """
-    Soft-deletes an item by changing its status to 'desactivado'.
+    Borra un producto definitivamente de la base de datos.
     """
     try:
-        db.table("articulos").update({"estado_articulo": "desactivado"}).eq("id_articulo", item_id).execute()
-        return {"message": f"Item {item_id} has been deactivated successfully"}
+        # Borramos el registro físicamente
+        db.table("articulos").delete().eq("id_articulo", item_id).execute()
+        return {"message": f"Producto {item_id} eliminado correctamente"}
         
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        print(f"DEBUG - delete_item error: {str(e)}")
+        raise HTTPException(status_code=500, detail="No se pudo eliminar el producto")
 
 @router.post("/{item_id}/images")
 async def upload_item_image(
     item_id: int,
     file: UploadFile = File(...),
     admin_db: Client = Depends(get_supabase_admin),
-    # Security check: only the owner can upload images
+    # Otra vez, solo el dueño puede subir fotos de su producto
     item: dict = Depends(verify_item_ownership)
 ):
     """
-    Uploads an image for a specific item.
-    Uses the Admin client to handle storage permissions easily.
+    Para subir una foto de un producto.
+    Usamos el admin_db porque el storage a veces da guerra con los permisos.
     """
     try:
-        # 1. Generate a unique name for the file
+        # 1. Le inventamos un nombre raro a la foto para que no se pisen
         file_extension = file.filename.split(".")[-1]
         unique_filename = f"{item_id}/{uuid.uuid4()}.{file_extension}"
         
-        # 2. Read file content and upload to Supabase Storage
+        # 2. Leemos el archivo y lo subimos a Supabase Storage
         file_content = await file.read()
         admin_db.storage.from_("articulos-imagenes").upload(unique_filename, file_content)
         
-        # 3. Get the public URL for the uploaded image
+        # 3. Pillamos el enlace público de la foto que acabamos de subir
         public_url = admin_db.storage.from_("articulos-imagenes").get_public_url(unique_filename)
         
-        # 4. Link the photo to the item in the database
+        # 4. Guardamos ese enlace en la tabla de fotos para que sepamos que es de este producto
         admin_db.table("fotos_articulo").insert({
             "id_articulo": item_id,
             "image_url": public_url

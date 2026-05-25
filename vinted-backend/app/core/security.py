@@ -3,20 +3,20 @@ from fastapi.security import OAuth2PasswordBearer
 from supabase import Client
 from app.db.supabase import get_supabase, get_supabase_admin
 
-# This tells FastAPI where the login endpoint is for the Swagger UI
+# Esto le dice a FastAPI dónde tiene que ir para loguearse en el Swagger
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Client = Depends(get_supabase)):
     """
-    Validates the JWT token and returns the authenticated user's ID.
+    Mira si el token es válido y te dice qué usuario es el que está haciendo la petición.
     """
     try:
-        # Ask Supabase to verify the token
+        # Le preguntamos a Supabase si el token este de mentira es verdad
         user_res = db.auth.get_user(token)
         if not user_res.user:
             raise HTTPException(status_code=401, detail="Invalid authentication credentials")
         
-        # Return the verified user ID
+        # Si todo va bien, devolvemos el ID del usuario verificado
         return user_res.user.id
     
     except Exception:
@@ -24,11 +24,11 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Client = Depends(g
 
 def get_admin_user(token: str = Depends(oauth2_scheme), db: Client = Depends(get_supabase_admin)):
     """
-    Verifies the user is an admin.
+    Comprueba si el usuario es un administrador de verdad.
     """
     user_id = get_current_user(token, db)
     
-    # Check role in the database using admin client to bypass RLS recursion
+    # Miramos en la tabla de usuarios qué rol tiene
     response = db.table("usuarios").select("rol").eq("id_usuario", user_id).execute()
     
     if not response.data:
@@ -37,6 +37,7 @@ def get_admin_user(token: str = Depends(oauth2_scheme), db: Client = Depends(get
         
     role = response.data[0].get("rol")
     if role != "admin":
+        # Si no eres admin, pues no te dejamos pasar
         print(f"DEBUG - get_admin_user: User {user_id} has role '{role}', not 'admin'")
         raise HTTPException(status_code=403, detail="Admin privileges required")
         

@@ -149,19 +149,32 @@ CREATE TABLE favoritos (
 -- 3. RLS POLICIES
 -- ==========================================
 
+-- Función auxiliar para checkear admin sin recursión infinita
+CREATE OR REPLACE FUNCTION es_admin()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM usuarios
+    WHERE id_usuario = auth.uid()
+    AND rol = 'admin'
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Usuarios
 ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Usuarios pueden ver su propio perfil" ON usuarios FOR SELECT USING (auth.uid() = id_usuario OR (SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+CREATE POLICY "Usuarios pueden ver su propio perfil" ON usuarios FOR SELECT USING (auth.uid() = id_usuario OR es_admin());
 CREATE POLICY "Sistema puede insertar usuarios" ON usuarios FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admins pueden ver todos los usuarios" ON usuarios FOR SELECT USING ((SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
-CREATE POLICY "Admins pueden actualizar usuarios" ON usuarios FOR UPDATE USING ((SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+CREATE POLICY "Admins pueden ver todos los usuarios" ON usuarios FOR SELECT USING (es_admin());
+CREATE POLICY "Admins pueden actualizar usuarios" ON usuarios FOR UPDATE USING (es_admin());
 
 -- Artículos
 ALTER TABLE articulos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Cualquiera puede ver artículos disponibles" ON articulos FOR SELECT USING (estado_articulo = 'disponible' OR auth.uid() = id_vendedor OR (SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+CREATE POLICY "Cualquiera puede ver artículos disponibles" ON articulos FOR SELECT USING (estado_articulo = 'disponible' OR auth.uid() = id_vendedor OR es_admin());
 CREATE POLICY "Usuarios pueden crear artículos" ON articulos FOR INSERT WITH CHECK (auth.uid() = id_vendedor);
-CREATE POLICY "Vendedores pueden editar sus artículos" ON articulos FOR UPDATE USING (auth.uid() = id_vendedor OR (SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
-CREATE POLICY "Admins pueden eliminar artículos" ON articulos FOR DELETE USING ((SELECT rol FROM usuarios WHERE id_usuario = auth.uid()) = 'admin');
+CREATE POLICY "Vendedores pueden editar sus artículos" ON articulos FOR UPDATE USING (auth.uid() = id_vendedor OR es_admin());
+CREATE POLICY "Vendedores pueden eliminar sus artículos" ON articulos FOR DELETE USING (auth.uid() = id_vendedor OR es_admin());
+CREATE POLICY "Admins pueden eliminar artículos" ON articulos FOR DELETE USING (es_admin());
 
 -- Fotos
 ALTER TABLE fotos_articulo ENABLE ROW LEVEL SECURITY;

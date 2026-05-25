@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-# Load variables from the .env file
+# Cargamos las variables del archivo .env para tener las claves de Supabase a mano
 load_dotenv()
 
 class Settings:

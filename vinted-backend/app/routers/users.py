@@ -12,6 +12,9 @@ def get_my_profile(
     db: Client = Depends(get_supabase_admin),
     user_id: str = Depends(get_current_user)
 ):
+    """
+    Saca los datos de mi perfil (el que está logueado ahora mismo).
+    """
     try:
         response = db.table("usuarios").select("*").eq("id_usuario", user_id).execute()
         
@@ -30,7 +33,7 @@ def get_my_items(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Returns all items that the current user has listed for sale.
+    Saca todos los trastos que yo he puesto a la venta.
     """
     try:
         response = db.table("articulos").select("*, fotos:fotos_articulo(*)").eq("id_vendedor", user_id).execute()
@@ -44,7 +47,7 @@ def get_my_favorited_items(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Returns the complete list of items that the current user has marked as favorites.
+    Te da la lista completa de las cosas que te han gustado.
     """
     try:
         response = db.table("favoritos") \
@@ -52,12 +55,12 @@ def get_my_favorited_items(
             .eq("id_usuario", user_id) \
             .execute()
             
-        # Extract and flatten the items from the join response
+        # Limpiamos los datos para que solo salgan los productos y no el lío de la tabla de favoritos
         favorited_items = []
         for fav in response.data:
             if fav.get("articulos"):
                 item = fav["articulos"]
-                # Ensure it's not a list (sometimes happens with Supabase joins if not specified correctly)
+                # A veces Supabase devuelve una lista en vez de un objeto, así que lo arreglamos
                 if isinstance(item, list): item = item[0] if item else None
                 if item: favorited_items.append(item)
                 
@@ -72,10 +75,45 @@ def get_my_purchases(
     user_id: str = Depends(get_current_user)
 ):
     """
-    Returns all successful purchases (orders) made by the current user.
+    Muestra todo lo que has comprado. 
+    También mete aquí las ofertas que te han aceptado, por si todavía no se ha creado el pedido de verdad.
     """
     try:
-        response = db.table("pedidos").select("*").eq("id_comprador", user_id).execute()
-        return response.data
+        # 1. Miramos en la tabla de 'pedidos'
+        response = db.table("pedidos").select("*, articulo:articulos(*, fotos:fotos_articulo(*))").eq("id_comprador", user_id).execute()
+        
+        purchases = []
+        purchased_item_ids = set()
+        for order in response.data:
+            if order.get("articulo"):
+                item = order["articulo"]
+                if isinstance(item, list): item = item[0] if item else None
+                order["articulo"] = item
+                if item: purchased_item_ids.add(item["id_articulo"])
+            purchases.append(order)
+            
+        # 2. Miramos en 'ofertas' las que ya están aceptadas
+        ofertas_res = db.table("ofertas").select("*, articulo:articulos(*, fotos:fotos_articulo(*))").eq("id_comprador", user_id).eq("estado", "aceptada").execute()
+        for offer in ofertas_res.data:
+            if offer["id_articulo"] in purchased_item_ids:
+                continue # Si ya está en pedidos, no lo repetimos
+                
+            item = offer.get("articulo")
+            if isinstance(item, list): item = item[0] if item else None
+            
+            # Hacemos que la oferta parezca un pedido para que el frontend no se entere
+            pseudo_order = {
+                "id_pedido": offer["id_oferta"], # Usamos el ID de la oferta de parche
+                "id_comprador": offer["id_comprador"],
+                "id_articulo": offer["id_articulo"],
+                "estado_pedido": "completado", 
+                "precio_final": offer["importe"],
+                "created_at": offer["created_at"],
+                "articulo": item
+            }
+            purchases.append(pseudo_order)
+            
+        return purchases
     except Exception as e:
+        print(f"DEBUG - get_my_purchases error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error fetching your purchases: {str(e)}")
