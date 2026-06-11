@@ -1,22 +1,31 @@
-from supabase import create_client, Client
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from app.core.config import settings
+from supabase import create_client, Client
 
-# Este es el cliente normal, el que obedece las reglas de seguridad (RLS)
-supabase_client: Client = create_client(
-    settings.SUPABASE_URL, 
-    settings.SUPABASE_PUBLISHABLE_KEY
-)
-
-# Este es el cliente admin, se salta todas las reglas. ¡Usar con mucho cuidado!
+# Mantenemos los clientes de Supabase SOLO para el storage (subir imágenes)
+# y tal vez algo de Auth si no migramos TODO el auth.
 supabase_admin: Client = create_client(
     settings.SUPABASE_URL, 
     settings.SUPABASE_SECRET_KEY
 )
 
-# Esto es para que FastAPI pueda pillar el cliente normal cuando lo necesite
-def get_supabase() -> Client:
-    return supabase_client
+def get_db_connection():
+    """
+    Crea una conexión a la base de datos PostgreSQL mediante psycopg2.
+    """
+    conn = psycopg2.connect(settings.DATABASE_URL, cursor_factory=RealDictCursor)
+    try:
+        yield conn
+    finally:
+        conn.close()
 
-# Esto es para pillar el cliente admin (el que manda de verdad)
 def get_supabase_admin() -> Client:
+    """
+    Se mantiene para el storage (subir imágenes).
+    """
+    return supabase_admin
+
+# Alias temporal por si algún router sigue usando get_supabase para auth/storage
+def get_supabase() -> Client:
     return supabase_admin

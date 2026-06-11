@@ -29,7 +29,7 @@ export default function PublishPage() {
     e.preventDefault()
     setLoading(true)
     try {
-      // 1. Create item
+      // 1. Primero creamos el artículo en la base de datos
       const itemRes = await api.post('/api/items', {
         titulo,
         descripcion,
@@ -40,7 +40,7 @@ export default function PublishPage() {
 
       const itemId = itemRes.data.id_articulo
 
-      // 2. Upload images
+      // 2. Después subimos todas las fotos que haya seleccionado el usuario
       for (const img of images) {
         const formData = new FormData()
         formData.append('file', img)
@@ -50,6 +50,7 @@ export default function PublishPage() {
       }
 
       setToast({ message: '¡Artículo publicado con éxito!', tone: 'success' })
+      // Esperamos un poco para que el usuario vea el mensaje y nos vamos a la home
       setTimeout(() => navigate('/'), 1500)
     } catch (error) {
       setToast({ message: 'Error al publicar el artículo.', tone: 'error' })

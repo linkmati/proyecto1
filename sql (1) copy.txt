@@ -1,0 +1,150 @@
+-- 2. CREACIÓN DE TABLAS
+-- ------------------------------------------
+
+-- Tabla de Usuarios
+CREATE TABLE usuarios (
+    id_usuario VARCHAR(36) PRIMARY KEY,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    nombre_usuario VARCHAR(100),
+    estado ENUM('activo', 'inactivo', 'suspendido', 'eliminado') DEFAULT 'activo' NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Tabla de Artículos
+CREATE TABLE articulos (
+    id_articulo BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_vendedor VARCHAR(36) NOT NULL,
+    titulo VARCHAR(150) NOT NULL,
+    descripcion TEXT,
+    categoria VARCHAR(100) NOT NULL,
+    precio_base DECIMAL(10, 2) NOT NULL,
+    estado_articulo ENUM('disponible', 'reservado', 'vendido', 'desactivado', 'eliminado') DEFAULT 'disponible' NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_vendedor) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
+);
+
+-- Fotos de los artículos
+CREATE TABLE fotos_articulo (
+    id_foto BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_articulo BIGINT NOT NULL,
+    image_url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_articulo) REFERENCES articulos(id_articulo) ON DELETE CASCADE
+);
+
+-- Negociaciones / Ofertas
+CREATE TABLE ofertas (
+    id_oferta BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_comprador VARCHAR(36) NOT NULL,
+    id_articulo BIGINT NOT NULL,
+    ultimo_emisor_id VARCHAR(36),
+    estado ENUM('pendiente', 'aceptada', 'rechazada', 'caducada') DEFAULT 'pendiente' NOT NULL,
+    importe DECIMAL(10, 2) NOT NULL,
+    mensaje TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_comprador) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (id_articulo) REFERENCES articulos(id_articulo) ON DELETE CASCADE,
+    FOREIGN KEY (ultimo_emisor_id) REFERENCES usuarios(id_usuario)
+);
+
+-- Chats / Conversaciones
+CREATE TABLE conversaciones (
+    id_conversacion BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario_1 VARCHAR(36) NOT NULL,
+    id_usuario_2 VARCHAR(36) NOT NULL,
+    id_articulo BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario_1) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (id_usuario_2) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (id_articulo) REFERENCES articulos(id_articulo) ON DELETE CASCADE,
+    CONSTRAINT unique_conversacion UNIQUE (id_usuario_1, id_usuario_2, id_articulo)
+);
+
+-- Mensajes dentro de los chats
+CREATE TABLE mensajes (
+    id_mensaje BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_conversacion BIGINT NOT NULL,
+    id_emisor VARCHAR(36) NOT NULL,
+    contenido TEXT NOT NULL,
+    leido BOOLEAN DEFAULT FALSE NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_conversacion) REFERENCES conversaciones(id_conversacion) ON DELETE CASCADE,
+    FOREIGN KEY (id_emisor) REFERENCES usuarios(id_usuario) ON DELETE CASCADE
+);
+
+-- Favoritos 
+CREATE TABLE favoritos (
+    id_favorito BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_usuario VARCHAR(36) NOT NULL,
+    id_articulo BIGINT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
+    FOREIGN KEY (id_articulo) REFERENCES articulos(id_articulo) ON DELETE CASCADE,
+    CONSTRAINT unique_favorito UNIQUE (id_usuario, id_articulo)
+);
+
+-- Pedidos
+CREATE TABLE pedidos (
+    id_pedido BIGINT AUTO_INCREMENT PRIMARY KEY,
+    id_comprador VARCHAR(36) NOT NULL,
+    id_articulo BIGINT NOT NULL,
+    estado_pedido ENUM('pendiente_pago', 'pagado', 'enviado', 'en_reparto', 'entregado', 'completado', 'cancelado') DEFAULT 'pendiente_pago' NOT NULL,
+    precio_final DECIMAL(10, 2) NOT NULL,
+    metodo_envio VARCHAR(100),
+    desde_direccion TEXT NOT NULL,
+    hacia_direccion TEXT NOT NULL,
+    tracking_number VARCHAR(150),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_comprador) REFERENCES usuarios(id_usuario) ON DELETE RESTRICT,
+    FOREIGN KEY (id_articulo) REFERENCES articulos(id_articulo) ON DELETE RESTRICT
+);
+
+
+-- 3. CONSULTAS SQL CON VARIABLES DEL CÓDIGO
+-- ------------------------------------------
+
+-- [ SECCIÓN: USUARIOS Y AUTENTICACIÓN ]
+-- Registrar o actualizar perfil (en register_user y login_user)
+INSERT INTO usuarios (id_usuario, email, nombre_usuario, estado) VALUES (new_user_id, user_data.email, user_data.nombre_usuario, 'activo') ON DUPLICATE KEY UPDATE nombre_usuario = VALUES(nombre_usuario), email = VALUES(email);
+-- Ver mi perfil (en get_my_profile)
+SELECT * FROM usuarios WHERE id_usuario = user_id;
+
+-- [ SECCIÓN: ARTÍCULOS ]
+-- Listar artículos con filtros (en list_items)
+SELECT a.*, f.image_url, u.nombre_usuario FROM articulos a LEFT JOIN fotos_articulo f ON a.id_articulo = f.id_articulo JOIN usuarios u ON a.id_vendedor = u.id_usuario WHERE a.estado_articulo = 'disponible' AND (categoria = 'Todas' OR a.categoria = categoria) AND (search IS NULL OR (a.titulo LIKE CONCAT('%', search, '%') OR a.descripcion LIKE CONCAT('%', search, '%'))) ORDER BY a.created_at DESC LIMIT limit;
+
+-- Crear nuevo anuncio (en create_item)
+INSERT INTO articulos (titulo, descripcion, precio_base, categoria, id_vendedor, estado_articulo) VALUES (item_data.titulo, item_data.descripcion, item_data.precio_base, item_data.categoria, user_id, 'disponible');
+
+-- Subir imagen de artículo (en upload_item_image)
+INSERT INTO fotos_articulo (id_articulo, image_url) VALUES (item_id, public_url);
+-- Borrar anuncio (en delete_item)
+DELETE FROM articulos WHERE id_articulo = item_id;
+
+-- [ SECCIÓN: OFERTAS Y NEGOCIACIÓN ]
+-- Crear oferta (en create_offer)
+INSERT INTO ofertas (importe, id_articulo, id_comprador, ultimo_emisor_id, estado, mensaje) VALUES (offer_data.importe, offer_data.id_articulo, user_id, user_id, 'pendiennte', offer_data.mensaje);
+
+-- Aceptar oferta (en accept_offer)
+UPDATE articulos SET estado_articulo = 'vendido' WHERE id_articuulo = offer.id_articulo;
+UPDATE ofertas SET estado = 'aceptada' WHERE id_oferta = offer_id;
+
+-- Hacer contraoferta (en make_counter_offer)
+UPDATE ofertas SET importe = ?, ultimo_emisor_id = ?, estado = 'pendiente', mensaje = ? WHERE id_oferta = ?;
+
+-- [ SECCIÓN: CHATS Y MENSAJES ]
+-- Crear conversación nueva (en send_message)
+INSERT INTO conversaciones (id_usuario_1, id_usuario_2, id_articulo) VALUES (u1, u2, message_data.id_articulo);
+-- Enviar mensaje (en send_message)
+INSERT INTO mensajes (id_conversacion, id_emisor, contenido, leido) VALUES (conversation_id, user_id, message_data.contenido, 0);
+-- Listar mis chats (en list_conversations)
+SELECT c.*, a.titulo, u1.nombre_usuario, u2.nombre_usuario FROM conversaciones c JOIN articulos a ON c.id_articulo = a.id_articulo JOIN usuarios u1 ON c.id_usuario_1 = u1.id_usuario JOIN usuarios u2 ON c.id_usuario_2 = u2.id_usuario WHERE c.id_usuario_1 = user_id OR c.id_usuario_2 = user_id;
+
+-- [ SECCIÓN: FAVORITOS ]
+-- Añadir a favoritos (en add_to_favorites)
+INSERT INTO favoritos (id_usuario, id_articulo) VALUES (user_id, item_id) ON DUPLICATE KEY UPDATE created_at = CURRENT_TIMESTAMP;
+-- Listar mis favoritos (en list_my_favorites)
+SELECT a.*, f.image_url FROM favoritos fav JOIN articulos a ON fav.id_articulo = a.id_articulo LEFT JOIN fotos_articulo f ON a.id_articulo = f.id_articulo WHERE fav.id_usuario = user_id;

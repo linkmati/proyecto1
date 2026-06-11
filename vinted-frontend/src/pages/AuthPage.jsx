@@ -29,12 +29,16 @@ export default function AuthPage() {
     setLoading(true)
     try {
       if (isLogin) {
+        // Si estamos en login, llamamos a la función de entrar
         await login(email, password)
       } else {
+        // Si no, llamamos a la de registrarse con el nombre incluido
         await register(email, password, nombre)
       }
+      // Si todo va bien, nos vamos a la página principal
       navigate('/')
     } catch (error) {
+      // Si falla, mostramos el error que nos mande el servidor
       setToast({ 
         message: error.response?.data?.detail || 'Error en la autenticación', 
         tone: 'error' 

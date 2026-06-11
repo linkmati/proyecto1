@@ -18,7 +18,7 @@ export default function CounterOfferPage() {
       try {
         const res = await api.get(`/api/offers/${id}`)
         setOffer(res.data)
-        setMonto(res.data.monto_oferta)
+        setMonto(res.data.importe)
       } catch (e) {
         setToast({ message: 'Error al cargar la oferta.', tone: 'error' })
       } finally {
@@ -31,7 +31,7 @@ export default function CounterOfferPage() {
   const handleSubmit = async (e) => {
     e.preventDefault()
     try {
-      await api.post(`/api/offers/${id}/counter`, { monto_oferta: parseFloat(monto) })
+      await api.patch(`/api/offers/${id}/counter-offer`, { nuevo_importe: parseFloat(monto) })
       setToast({ message: 'Contraoferta enviada con éxito', tone: 'success' })
       setTimeout(() => navigate('/mensajes'), 1500)
     } catch (error) {

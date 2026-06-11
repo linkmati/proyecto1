@@ -1,7 +1,7 @@
 from fastapi import Depends, HTTPException
 from fastapi.security import OAuth2PasswordBearer
 from supabase import Client
-from app.db.supabase import get_supabase, get_supabase_admin
+from app.db.supabase import get_supabase, get_supabase_admin, get_db_connection
 
 # Esto le dice a FastAPI dónde tiene que ir para loguearse en el Swagger
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -22,20 +22,26 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Client = Depends(g
     except Exception:
         raise HTTPException(status_code=401, detail="Invalid or expired token")
 
-def get_admin_user(token: str = Depends(oauth2_scheme), db: Client = Depends(get_supabase_admin)):
+def get_admin_user(
+    token: str = Depends(oauth2_scheme), 
+    db: Client = Depends(get_supabase_admin),
+    conn = Depends(get_db_connection)
+):
     """
     Comprueba si el usuario es un administrador de verdad.
     """
     user_id = get_current_user(token, db)
     
-    # Miramos en la tabla de usuarios qué rol tiene
-    response = db.table("usuarios").select("rol").eq("id_usuario", user_id).execute()
+    # Miramos en la tabla de usuarios qué rol tiene con SQL empotrado
+    with conn.cursor() as cur:
+        cur.execute("SELECT rol FROM usuarios WHERE id_usuario = %s", (user_id,))
+        row = cur.fetchone()
     
-    if not response.data:
+    if not row:
         print(f"DEBUG - get_admin_user: No profile found for user_id {user_id}")
         raise HTTPException(status_code=403, detail="Admin privileges required: Profile not found")
         
-    role = response.data[0].get("rol")
+    role = row.get("rol")
     if role != "admin":
         # Si no eres admin, pues no te dejamos pasar
         print(f"DEBUG - get_admin_user: User {user_id} has role '{role}', not 'admin'")

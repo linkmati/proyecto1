@@ -18,19 +18,24 @@ export default function HomePage({ searchTerm = '' }) {
 
   const CATEGORIAS = ['Todas', 'Moda', 'Hogar', 'Electrónica', 'Entretenimiento', 'Otros']
 
+  // Esta función es la que pide los datos al servidor
   const loadData = async () => {
     try {
       setLoading(true)
       const params = { limit: 20 }
+      // Si el usuario ha elegido una categoría, la añadimos a la consulta
       if (category !== 'Todas') params.categoria = category
+      // Si hay algo escrito en el buscador, también lo filtramos
       if (searchTerm.trim()) params.search = searchTerm.trim()
       
+      // Pedimos los artículos y los favoritos a la vez para ir más rápido
       const [artRes, favRes] = await Promise.all([
         api.get('/api/items', { params }).catch(() => ({ data: [] })),
         isAuthenticated ? api.get('/api/favorites').catch(() => ({ data: [] })) : Promise.resolve({ data: [] })
       ])
       
       setArticles(Array.isArray(artRes.data) ? artRes.data : [])
+      // Guardamos solo los IDs de los favoritos para saber qué corazones pintar de rojo
       const favIds = (Array.isArray(favRes.data) ? favRes.data : []).map(f => String(f.id_articulo))
       setFavorites(favIds)
     } catch (error) {
@@ -41,13 +46,16 @@ export default function HomePage({ searchTerm = '' }) {
     }
   }
 
+  // Cada vez que cambie la búsqueda o la categoría, volvemos a cargar los datos
   useEffect(() => {
+    // Ponemos un pequeño retraso para no agobiar al servidor si el usuario escribe muy rápido
     const timer = setTimeout(() => {
       loadData()
     }, 400)
     return () => clearTimeout(timer)
   }, [searchTerm, category, isAuthenticated])
 
+  // Para marcar o desmarcar como favorito
   const toggleFavorite = async (id) => {
     if (!isAuthenticated) {
       setToast({ message: 'Inicia sesión para guardar favoritos.', tone: 'error' })
