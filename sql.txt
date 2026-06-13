@@ -1,8 +1,3 @@
--- Borrado de tablas
-
-DROP TABLE IF EXISTS favoritos, mensajes, conversaciones, eventos_envio, incidencias, costes_pedidos, pedidos, ofertas, fotos_articulo, articulos, usuarios CASCADE;
-DROP TYPE IF EXISTS estado_usuario_enum, estado_articulo_enum, estado_oferta_enum, estado_pedido_enum, tipo_coste_enum, tipo_incidencia_enum, estado_incidencia_enum CASCADE;
-
 -- Tipos de datos
 
 CREATE TYPE estado_usuario_enum AS ENUM ('activo', 'inactivo', 'suspendido', 'eliminado');
