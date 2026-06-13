@@ -3,8 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.supabase import get_db_connection
 from app.routers import items, auth, offers, users, messages, favorites, admin
 
+# NOTA PRESENTACIÓN: Inicializamos la app con FastAPI. 
+# FastAPI nos genera automáticamente la documentación en /docs.
 app = FastAPI(title="Vinted Clone API")
 
+# NOTA PRESENTACIÓN: CORS (Cross-Origin Resource Sharing).
+# Esto es imprescindible para que nuestro Frontend (que correrá en otro puerto/dominio)
+# pueda hacer peticiones al Backend sin que el navegador bloquee la conexión por seguridad.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,7 +19,8 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# Registramos las rutas
+# NOTA PRESENTACIÓN: Separamos el código en "Routers" para que main.py no sea gigante.
+# Cada archivo en la carpeta 'routers' tiene sus propias funciones y rutas agrupadas.
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(items.router)
@@ -30,6 +36,9 @@ def home():
 @app.get("/health")
 def salud(conn = Depends(get_db_connection)):
     """Punto de control para ver si la DB responde."""
+    # NOTA PRESENTACIÓN: Usamos `Depends` para la inyección de dependencias.
+    # FastAPI se encarga de llamar a get_db_connection, pasarnos la conexión, 
+    # y cerrarla cuando termina la función.
     try:
         with conn.cursor() as cur:
             cur.execute("SELECT 1")

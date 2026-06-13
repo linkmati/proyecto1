@@ -12,6 +12,9 @@ router = APIRouter(prefix="/api/items", tags=["Items"])
 async def buscar_producto(id: int, conn):
     """Busca un producto. Si no está, falla."""
     with conn.cursor() as cur:
+        # NOTA PRESENTACIÓN: Siempre pasamos las variables como tupla `(id,)` 
+        # en lugar de concatenar cadenas tipo f"SELECT ... {id}".
+        # Esto previene ataques de Inyección SQL.
         cur.execute("SELECT * FROM articulos WHERE id_articulo = %s", (id,))
         item = cur.fetchone()
     if not item:
@@ -39,6 +42,7 @@ def ver_todo(
     consulta = "SELECT * FROM articulos WHERE estado_articulo = 'disponible'"
     parametros = []
     
+    # NOTA PRESENTACIÓN: Montamos la consulta dinámicamente según lo que pida el usuario
     if categoria and categoria != "Todas":
         consulta += " AND categoria = %s"
         parametros.append(categoria)
@@ -58,11 +62,9 @@ def ver_todo(
         
         # Rellenamos lo que falta (fotos y nombre del vendedor)
         for p in lista:
-            # Fotos
             cur.execute("SELECT * FROM fotos_articulo WHERE id_articulo = %s", (p["id_articulo"],))
             p["fotos"] = cur.fetchall()
             
-            # Nombre del vendedor (lo sacamos de la tabla usuarios)
             cur.execute("SELECT nombre_usuario, email FROM usuarios WHERE id_usuario = %s", (p["id_vendedor"],))
             vendedor = cur.fetchone()
             if vendedor:
@@ -97,7 +99,8 @@ def crear(datos: ItemCreate, conn = Depends(get_db_connection), user_id: str = D
     item = datos.model_dump()
     item["id_vendedor"] = user_id 
     
-    # Montamos el INSERT a mano para aprender
+    # NOTA PRESENTACIÓN: Montamos el INSERT generando los nombres de las columnas y los %s
+    # automáticamente en base a las claves del diccionario que nos llega del frontend.
     columnas = ", ".join(item.keys())
     valores = ", ".join(["%s"] * len(item))
     sql = f"INSERT INTO articulos ({columnas}) VALUES ({valores}) RETURNING *"
@@ -106,6 +109,8 @@ def crear(datos: ItemCreate, conn = Depends(get_db_connection), user_id: str = D
         with conn.cursor() as cur:
             cur.execute(sql, list(item.values()))
             nuevo = cur.fetchone()
+            # NOTA PRESENTACIÓN: Hacer commit es fundamental para confirmar la transacción.
+            # Si no, se queda en el limbo y no se guarda en disco.
             conn.commit()
             return {**nuevo, "fotos": []}
     except Exception as e:

@@ -2,7 +2,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "🚀 RUN PROJECT (With Ngrok)",
+            "name": "🚀 RUN PROJECT",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/run_dev.py",
