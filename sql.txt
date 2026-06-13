@@ -150,36 +150,36 @@ CREATE TABLE favoritos (
 -- ==========================================
 
 -- 1. Creación de Roles
-CREATE ROLE 'admin_role';
-CREATE ROLE 'user_role';
+CREATE ROLE admin_role;
+CREATE ROLE user_role;
 
 -- 2. Privilegios para el rol de administrador (DAC)
-GRANT ALL PRIVILEGES ON articulos TO 'admin_role' WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON usuarios TO 'admin_role' WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON ofertas TO 'admin_role' WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON pedidos TO 'admin_role' WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON incidencias TO 'admin_role' WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON conversaciones TO 'admin_role' WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON mensajes TO 'admin_role' WITH GRANT OPTION;
-GRANT ALL PRIVILEGES ON favoritos TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON articulos TO admin_role WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON usuarios TO admin_role WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON ofertas TO admin_role WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON pedidos TO admin_role WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON incidencias TO admin_role WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON conversaciones TO admin_role WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON mensajes TO admin_role WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON favoritos TO admin_role WITH GRANT OPTION;
 
 -- 3. Privilegios para el rol de usuario normal (DAC)
 -- Permisos sobre sus propios datos (la lógica a nivel de fila se controlará en el backend)
-GRANT SELECT, INSERT, UPDATE, DELETE ON articulos TO 'user_role';
-GRANT SELECT, INSERT, UPDATE, DELETE ON ofertas TO 'user_role';
-GRANT SELECT, INSERT, UPDATE, DELETE ON conversaciones TO 'user_role';
-GRANT SELECT, INSERT, UPDATE, DELETE ON mensajes TO 'user_role';
-GRANT SELECT, INSERT, DELETE ON favoritos TO 'user_role';
-GRANT SELECT, INSERT ON fotos_articulo TO 'user_role';
-GRANT SELECT, UPDATE ON usuarios TO 'user_role';
-GRANT SELECT, INSERT, UPDATE ON pedidos TO 'user_role';
+GRANT SELECT, INSERT, UPDATE, DELETE ON articulos TO user_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ofertas TO user_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON conversaciones TO user_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON mensajes TO user_role;
+GRANT SELECT, INSERT, DELETE ON favoritos TO user_role;
+GRANT SELECT, INSERT ON fotos_articulo TO user_role;
+GRANT SELECT, UPDATE ON usuarios TO user_role;
+GRANT SELECT, INSERT, UPDATE ON pedidos TO user_role;
 
 -- 4. Creación de usuarios de la base de datos (Ejemplos)
--- CREATE USER 'vinted_admin'@'localhost' IDENTIFIED BY 'admin123';
--- GRANT 'admin_role' TO 'vinted_admin'@'localhost';
+-- CREATE USER vinted_admin IDENTIFIED BY 'admin123';
+-- GRANT admin_role TO vinted_admin;
 
--- CREATE USER 'vinted_user'@'localhost' IDENTIFIED BY 'user123';
--- GRANT 'user_role' TO 'vinted_user'@'localhost';
+-- CREATE USER vinted_user IDENTIFIED BY 'user123';
+-- GRANT user_role TO vinted_user;
 
 -- 5. Ejemplo de Revocación de permisos
--- REVOKE DELETE ON articulos FROM 'user_role';
+-- REVOKE DELETE ON articulos FROM user_role;
