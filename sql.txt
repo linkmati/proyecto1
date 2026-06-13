@@ -146,67 +146,40 @@ CREATE TABLE favoritos (
 );
 
 -- ==========================================
--- 3. RLS POLICIES
+-- 3. PERMISOS Y ROLES (SEGURIDAD DAC)
 -- ==========================================
 
--- Función auxiliar para checkear admin sin recursión infinita
-CREATE OR REPLACE FUNCTION es_admin()
-RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN EXISTS (
-    SELECT 1 FROM usuarios
-    WHERE id_usuario = auth.uid()
-    AND rol = 'admin'
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- 1. Creación de Roles
+CREATE ROLE 'admin_role';
+CREATE ROLE 'user_role';
 
--- Usuarios
-ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Usuarios pueden ver su propio perfil" ON usuarios FOR SELECT USING (auth.uid() = id_usuario OR es_admin());
-CREATE POLICY "Sistema puede insertar usuarios" ON usuarios FOR INSERT WITH CHECK (true);
-CREATE POLICY "Admins pueden ver todos los usuarios" ON usuarios FOR SELECT USING (es_admin());
-CREATE POLICY "Admins pueden actualizar usuarios" ON usuarios FOR UPDATE USING (es_admin());
+-- 2. Privilegios para el rol de administrador (DAC)
+GRANT ALL PRIVILEGES ON articulos TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON usuarios TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON ofertas TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON pedidos TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON incidencias TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON conversaciones TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON mensajes TO 'admin_role' WITH GRANT OPTION;
+GRANT ALL PRIVILEGES ON favoritos TO 'admin_role' WITH GRANT OPTION;
 
--- Artículos
-ALTER TABLE articulos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Cualquiera puede ver artículos disponibles" ON articulos FOR SELECT USING (estado_articulo = 'disponible' OR auth.uid() = id_vendedor OR es_admin());
-CREATE POLICY "Usuarios pueden crear artículos" ON articulos FOR INSERT WITH CHECK (auth.uid() = id_vendedor);
-CREATE POLICY "Vendedores pueden editar sus artículos" ON articulos FOR UPDATE USING (auth.uid() = id_vendedor OR es_admin());
-CREATE POLICY "Vendedores pueden eliminar sus artículos" ON articulos FOR DELETE USING (auth.uid() = id_vendedor OR es_admin());
-CREATE POLICY "Admins pueden eliminar artículos" ON articulos FOR DELETE USING (es_admin());
+-- 3. Privilegios para el rol de usuario normal (DAC)
+-- Permisos sobre sus propios datos (la lógica a nivel de fila se controlará en el backend)
+GRANT SELECT, INSERT, UPDATE, DELETE ON articulos TO 'user_role';
+GRANT SELECT, INSERT, UPDATE, DELETE ON ofertas TO 'user_role';
+GRANT SELECT, INSERT, UPDATE, DELETE ON conversaciones TO 'user_role';
+GRANT SELECT, INSERT, UPDATE, DELETE ON mensajes TO 'user_role';
+GRANT SELECT, INSERT, DELETE ON favoritos TO 'user_role';
+GRANT SELECT, INSERT ON fotos_articulo TO 'user_role';
+GRANT SELECT, UPDATE ON usuarios TO 'user_role';
+GRANT SELECT, INSERT, UPDATE ON pedidos TO 'user_role';
 
--- Fotos
-ALTER TABLE fotos_articulo ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Ver fotos de artículos" ON fotos_articulo FOR SELECT USING (true);
-CREATE POLICY "Sellers pueden subir fotos" ON fotos_articulo FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM articulos WHERE id_articulo = fotos_articulo.id_articulo AND id_vendedor = auth.uid())
-);
+-- 4. Creación de usuarios de la base de datos (Ejemplos)
+-- CREATE USER 'vinted_admin'@'localhost' IDENTIFIED BY 'admin123';
+-- GRANT 'admin_role' TO 'vinted_admin'@'localhost';
 
--- Ofertas
-ALTER TABLE ofertas ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Participantes pueden ver ofertas" ON ofertas FOR SELECT USING (
-    auth.uid() = id_comprador OR EXISTS (SELECT 1 FROM articulos WHERE id_articulo = ofertas.id_articulo AND id_vendedor = auth.uid())
-);
-CREATE POLICY "Compradores pueden crear ofertas" ON ofertas FOR INSERT WITH CHECK (auth.uid() = id_comprador);
-CREATE POLICY "Participantes pueden actualizar ofertas" ON ofertas FOR UPDATE USING (
-    auth.uid() = id_comprador OR EXISTS (SELECT 1 FROM articulos WHERE id_articulo = ofertas.id_articulo AND id_vendedor = auth.uid())
-);
+-- CREATE USER 'vinted_user'@'localhost' IDENTIFIED BY 'user123';
+-- GRANT 'user_role' TO 'vinted_user'@'localhost';
 
--- Conversaciones
-ALTER TABLE conversaciones ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Usuarios pueden ver sus chats" ON conversaciones FOR SELECT USING (auth.uid() = id_usuario_1 OR auth.uid() = id_usuario_2);
-CREATE POLICY "Usuarios pueden crear chats" ON conversaciones FOR INSERT WITH CHECK (auth.uid() = id_usuario_1 OR auth.uid() = id_usuario_2);
-
--- Mensajes
-ALTER TABLE mensajes ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Usuarios pueden ver mensajes de sus chats" ON mensajes FOR SELECT USING (
-  EXISTS (SELECT 1 FROM conversaciones WHERE id_conversacion = mensajes.id_conversacion AND (id_usuario_1 = auth.uid() OR id_usuario_2 = auth.uid()))
-);
-CREATE POLICY "Usuarios pueden enviar mensajes" ON mensajes FOR INSERT WITH CHECK (auth.uid() = id_emisor);
-
--- Favoritos
-ALTER TABLE favoritos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Usuarios ven sus propios favoritos" ON favoritos FOR SELECT USING (auth.uid() = id_usuario);
-CREATE POLICY "Usuarios pueden añadir favoritos" ON favoritos FOR INSERT WITH CHECK (auth.uid() = id_usuario);
-CREATE POLICY "Usuarios pueden quitar favoritos" ON favoritos FOR DELETE USING (auth.uid() = id_usuario);
+-- 5. Ejemplo de Revocación de permisos
+-- REVOKE DELETE ON articulos FROM 'user_role';
