@@ -1,13 +1,9 @@
--- ==========================================
--- 0. CLEAN START (DROP EVERYTHING)
--- ==========================================
+-- Borrado de tablas
 
 DROP TABLE IF EXISTS favoritos, mensajes, conversaciones, eventos_envio, incidencias, costes_pedidos, pedidos, ofertas, fotos_articulo, articulos, usuarios CASCADE;
 DROP TYPE IF EXISTS estado_usuario_enum, estado_articulo_enum, estado_oferta_enum, estado_pedido_enum, tipo_coste_enum, tipo_incidencia_enum, estado_incidencia_enum CASCADE;
 
--- ==========================================
--- 1. TYPES & ENUMS
--- ==========================================
+-- Tipos de datos
 
 CREATE TYPE estado_usuario_enum AS ENUM ('activo', 'inactivo', 'suspendido', 'eliminado');
 CREATE TYPE estado_articulo_enum AS ENUM ('disponible', 'reservado', 'vendido', 'desactivado', 'eliminado');
@@ -17,9 +13,7 @@ CREATE TYPE tipo_coste_enum AS ENUM ('envio', 'comision_comprador', 'seguro_prot
 CREATE TYPE tipo_incidencia_enum AS ENUM ('no_recibido', 'articulo_diferente', 'articulo_danado', 'falsificacion');
 CREATE TYPE estado_incidencia_enum AS ENUM ('abierta', 'en_mediacion', 'resuelta_reembolso', 'resuelta_sin_reembolso', 'cerrada');
 
--- ==========================================
--- 2. TABLES
--- ==========================================
+-- Tablas
 
 CREATE TABLE usuarios (
     id_usuario UUID PRIMARY KEY, -- Sync with Supabase Auth
@@ -145,15 +139,13 @@ CREATE TABLE favoritos (
     CONSTRAINT unique_favorito UNIQUE (id_usuario, id_articulo)
 );
 
--- ==========================================
--- 3. PERMISOS Y ROLES (SEGURIDAD DAC)
--- ==========================================
+-- Permisos y roles
 
--- 1. Creación de Roles
+-- Creacion de roles
 CREATE ROLE admin_role;
 CREATE ROLE user_role;
 
--- 2. Privilegios para el rol de administrador (DAC)
+-- Privilegios admin
 GRANT ALL PRIVILEGES ON articulos TO admin_role WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON usuarios TO admin_role WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON ofertas TO admin_role WITH GRANT OPTION;
@@ -163,8 +155,8 @@ GRANT ALL PRIVILEGES ON conversaciones TO admin_role WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON mensajes TO admin_role WITH GRANT OPTION;
 GRANT ALL PRIVILEGES ON favoritos TO admin_role WITH GRANT OPTION;
 
--- 3. Privilegios para el rol de usuario normal (DAC)
--- Permisos sobre sus propios datos (la lógica a nivel de fila se controlará en el backend)
+-- Privilegios usuario normal
+-- La logica a nivel de fila se hace en el backend
 GRANT SELECT, INSERT, UPDATE, DELETE ON articulos TO user_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ofertas TO user_role;
 GRANT SELECT, INSERT, UPDATE, DELETE ON conversaciones TO user_role;
@@ -174,12 +166,12 @@ GRANT SELECT, INSERT ON fotos_articulo TO user_role;
 GRANT SELECT, UPDATE ON usuarios TO user_role;
 GRANT SELECT, INSERT, UPDATE ON pedidos TO user_role;
 
--- 4. Creación de usuarios de la base de datos (Ejemplos)
+-- Usuarios de ejemplo
 -- CREATE USER vinted_admin IDENTIFIED BY 'admin123';
 -- GRANT admin_role TO vinted_admin;
 
 -- CREATE USER vinted_user IDENTIFIED BY 'user123';
 -- GRANT user_role TO vinted_user;
 
--- 5. Ejemplo de Revocación de permisos
+-- Revocar permisos
 -- REVOKE DELETE ON articulos FROM user_role;
