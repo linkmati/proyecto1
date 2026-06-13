@@ -9,9 +9,12 @@ router = APIRouter(prefix="/api/users", tags=["Users"])
 @router.get("/me", response_model=UserResponse)
 def mi_perfil(conn = Depends(get_db_connection), user_id: str = Depends(get_current_user)):
     """Pilla mis datos de usuario de la tabla 'usuarios'."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM usuarios WHERE id_usuario = %s", (user_id,))
-        usuario = cur.fetchone()
+    cursor = conn.cursor()
+    query = "SELECT * FROM usuarios WHERE id_usuario = %s"
+    cursor.execute(query, (user_id,))
+    usuario = cursor.fetchone()
+    cursor.close()
+    
     if not usuario: 
         raise HTTPException(status_code=404, detail="No te he encontrado en la base de datos")
     return usuario
@@ -19,58 +22,74 @@ def mi_perfil(conn = Depends(get_db_connection), user_id: str = Depends(get_curr
 @router.get("/me/items", response_model=List[ItemResponse])
 def mis_productos(conn = Depends(get_db_connection), user_id: str = Depends(get_current_user)):
     """Lista todos los artículos que yo he subido."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM articulos WHERE id_vendedor = %s", (user_id,))
-        trastos = cur.fetchall()
-        # Para cada uno buscamos sus fotos
-        for t in trastos:
-            cur.execute("SELECT * FROM fotos_articulo WHERE id_articulo = %s", (t["id_articulo"],))
-            t["fotos"] = cur.fetchall()
+    cursor = conn.cursor()
+    query = "SELECT * FROM articulos WHERE id_vendedor = %s"
+    cursor.execute(query, (user_id,))
+    trastos = cursor.fetchall()
+    
+    for t in trastos:
+        query_fotos = "SELECT * FROM fotos_articulo WHERE id_articulo = %s"
+        cursor.execute(query_fotos, (t["id_articulo"],))
+        t["fotos"] = cursor.fetchall()
+        
+    cursor.close()
     return trastos
 
 @router.get("/me/favorites", response_model=List[ItemResponse])
 def mis_favoritos(conn = Depends(get_db_connection), user_id: str = Depends(get_current_user)):
     """Artículos que he marcado con el corazón."""
-    with conn.cursor() as cur:
-        cur.execute("""
-            SELECT a.* FROM articulos a
-            JOIN favoritos f ON a.id_articulo = f.id_articulo
-            WHERE f.id_usuario = %s
-        """, (user_id,))
-        cosas = cur.fetchall()
-        for c in cosas:
-            cur.execute("SELECT * FROM fotos_articulo WHERE id_articulo = %s", (c["id_articulo"],))
-            c["fotos"] = cur.fetchall()
+    cursor = conn.cursor()
+    query = """
+        SELECT a.* FROM articulos a
+        JOIN favoritos f ON a.id_articulo = f.id_articulo
+        WHERE f.id_usuario = %s
+    """
+    cursor.execute(query, (user_id,))
+    cosas = cursor.fetchall()
+    
+    for c in cosas:
+        query_fotos = "SELECT * FROM fotos_articulo WHERE id_articulo = %s"
+        cursor.execute(query_fotos, (c["id_articulo"],))
+        c["fotos"] = cursor.fetchall()
+        
+    cursor.close()
     return cosas
 
 @router.get("/me/purchases", response_model=List[OrderResponse])
 def mis_compras(conn = Depends(get_db_connection), user_id: str = Depends(get_current_user)):
     """Todo lo que he comprado o tengo apalabrado."""
-    with conn.cursor() as cur:
-        # 1. Compras que ya están en la tabla de pedidos
-        cur.execute("""
-            SELECT id_pedido, id_comprador, id_articulo, estado_pedido, precio_final, created_at
-            FROM pedidos WHERE id_comprador = %s
-        """, (user_id,))
-        compras = cur.fetchall()
-        
-        id_articulos_pedidos = [c["id_articulo"] for c in compras]
-        
-        # 2. Ofertas aceptadas (que son como una compra pero sin pedido formal todavía)
-        cur.execute("""
-            SELECT id_oferta as id_pedido, id_comprador, id_articulo, 'completado' as estado_pedido, importe as precio_final, created_at
-            FROM ofertas WHERE id_comprador = %s AND estado = 'aceptada'
-        """, (user_id,))
-        for o in cur.fetchall():
-            if o["id_articulo"] not in id_articulos_pedidos: 
-                compras.append(o)
+    cursor = conn.cursor()
+    
+    # 1. Compras que ya están en la tabla de pedidos
+    query_pedidos = """
+        SELECT id_pedido, id_comprador, id_articulo, estado_pedido, precio_final, created_at
+        FROM pedidos WHERE id_comprador = %s
+    """
+    cursor.execute(query_pedidos, (user_id,))
+    compras = cursor.fetchall()
+    
+    id_articulos_pedidos = [c["id_articulo"] for c in compras]
+    
+    # 2. Ofertas aceptadas
+    query_ofertas = """
+        SELECT id_oferta as id_pedido, id_comprador, id_articulo, 'completado' as estado_pedido, importe as precio_final, created_at
+        FROM ofertas WHERE id_comprador = %s AND estado = 'aceptada'
+    """
+    cursor.execute(query_ofertas, (user_id,))
+    for o in cursor.fetchall():
+        if o["id_articulo"] not in id_articulos_pedidos: 
+            compras.append(o)
 
-        # 3. Rellenamos la info del artículo para que el frontend pueda mostrar la foto y el título
-        for c in compras:
-            cur.execute("SELECT * FROM articulos WHERE id_articulo = %s", (c["id_articulo"],))
-            c["articulo"] = cur.fetchone()
-            if c["articulo"]:
-                cur.execute("SELECT * FROM fotos_articulo WHERE id_articulo = %s", (c["id_articulo"],))
-                c["articulo"]["fotos"] = cur.fetchall()
-                
+    # 3. Rellenamos la info
+    for c in compras:
+        query_art = "SELECT * FROM articulos WHERE id_articulo = %s"
+        cursor.execute(query_art, (c["id_articulo"],))
+        c["articulo"] = cursor.fetchone()
+        
+        if c["articulo"]:
+            query_fotos = "SELECT * FROM fotos_articulo WHERE id_articulo = %s"
+            cursor.execute(query_fotos, (c["id_articulo"],))
+            c["articulo"]["fotos"] = cursor.fetchall()
+            
+    cursor.close()
     return compras

@@ -11,12 +11,15 @@ router = APIRouter(prefix="/api/items", tags=["Items"])
 
 async def buscar_producto(id: int, conn):
     """Busca un producto. Si no está, falla."""
-    with conn.cursor() as cur:
-        # NOTA PRESENTACIÓN: Siempre pasamos las variables como tupla `(id,)` 
-        # en lugar de concatenar cadenas tipo f"SELECT ... {id}".
-        # Esto previene ataques de Inyección SQL.
-        cur.execute("SELECT * FROM articulos WHERE id_articulo = %s", (id,))
-        item = cur.fetchone()
+    # NOTA PRESENTACIÓN: Siempre pasamos las variables como tupla `(id,)` 
+    # en lugar de concatenar cadenas tipo f"SELECT ... {id}".
+    # Esto previene ataques de Inyección SQL.
+    cursor = conn.cursor()
+    query = "SELECT * FROM articulos WHERE id_articulo = %s"
+    cursor.execute(query, (id,))
+    item = cursor.fetchone()
+    cursor.close()
+    
     if not item:
         raise HTTPException(404, "No existe este producto")
     return item
@@ -39,58 +42,68 @@ def ver_todo(
 ):
     """Muestra los productos en venta."""
     # SQL muy básico
-    consulta = "SELECT * FROM articulos WHERE estado_articulo = 'disponible'"
+    query = "SELECT * FROM articulos WHERE estado_articulo = 'disponible'"
     parametros = []
     
     # NOTA PRESENTACIÓN: Montamos la consulta dinámicamente según lo que pida el usuario
     if categoria and categoria != "Todas":
-        consulta += " AND categoria = %s"
+        query += " AND categoria = %s"
         parametros.append(categoria)
         
     if search:
         # Usamos LOWER para que no importen las mayúsculas (búsqueda fácil)
-        consulta += " AND (LOWER(titulo) LIKE LOWER(%s) OR LOWER(descripcion) LIKE LOWER(%s))"
+        query += " AND (LOWER(titulo) LIKE LOWER(%s) OR LOWER(descripcion) LIKE LOWER(%s))"
         texto = f"%{search}%"
         parametros.extend([texto, texto])
         
-    consulta += " ORDER BY created_at DESC LIMIT %s"
+    query += " ORDER BY created_at DESC LIMIT %s"
     parametros.append(limit)
     
-    with conn.cursor() as cur:
-        cur.execute(consulta, tuple(parametros))
-        lista = cur.fetchall()
+    cursor = conn.cursor()
+    cursor.execute(query, tuple(parametros))
+    lista = cursor.fetchall()
+    
+    # Rellenamos lo que falta (fotos y nombre del vendedor)
+    for p in lista:
+        query_fotos = "SELECT * FROM fotos_articulo WHERE id_articulo = %s"
+        cursor.execute(query_fotos, (p["id_articulo"],))
+        p["fotos"] = cursor.fetchall()
         
-        # Rellenamos lo que falta (fotos y nombre del vendedor)
-        for p in lista:
-            cur.execute("SELECT * FROM fotos_articulo WHERE id_articulo = %s", (p["id_articulo"],))
-            p["fotos"] = cur.fetchall()
+        query_vendedor = "SELECT nombre_usuario, email FROM usuarios WHERE id_usuario = %s"
+        cursor.execute(query_vendedor, (p["id_vendedor"],))
+        vendedor = cursor.fetchone()
+        if vendedor:
+            p["vendedor_nombre"] = vendedor["nombre_usuario"] or vendedor["email"].split("@")[0]
+        else:
+            p["vendedor_nombre"] = "Vendedor"
             
-            cur.execute("SELECT nombre_usuario, email FROM usuarios WHERE id_usuario = %s", (p["id_vendedor"],))
-            vendedor = cur.fetchone()
-            if vendedor:
-                p["vendedor_nombre"] = vendedor["nombre_usuario"] or vendedor["email"].split("@")[0]
-            else:
-                p["vendedor_nombre"] = "Vendedor"
-            
+    cursor.close()
     return lista
 
 @router.get("/{id}", response_model=ItemResponse)
 def ver_uno(id: int, conn = Depends(get_db_connection)):
     """Pilla toda la info de un solo trasto."""
-    with conn.cursor() as cur:
-        cur.execute("SELECT * FROM articulos WHERE id_articulo = %s", (id,))
-        item = cur.fetchone()
-        if not item: raise HTTPException(404, "No encontrado")
-        
-        # Fotos
-        cur.execute("SELECT * FROM fotos_articulo WHERE id_articulo = %s", (id,))
-        item["fotos"] = cur.fetchall()
-        
-        # Vendedor
-        cur.execute("SELECT nombre_usuario, email FROM usuarios WHERE id_usuario = %s", (item["id_vendedor"],))
-        v = cur.fetchone()
-        item["vendedor_nombre"] = (v["nombre_usuario"] or v["email"].split("@")[0]) if v else "Vendedor"
-        
+    cursor = conn.cursor()
+    query = "SELECT * FROM articulos WHERE id_articulo = %s"
+    cursor.execute(query, (id,))
+    item = cursor.fetchone()
+    
+    if not item: 
+        cursor.close()
+        raise HTTPException(404, "No encontrado")
+    
+    # Fotos
+    query_fotos = "SELECT * FROM fotos_articulo WHERE id_articulo = %s"
+    cursor.execute(query_fotos, (id,))
+    item["fotos"] = cursor.fetchall()
+    
+    # Vendedor
+    query_vendedor = "SELECT nombre_usuario, email FROM usuarios WHERE id_usuario = %s"
+    cursor.execute(query_vendedor, (item["id_vendedor"],))
+    v = cursor.fetchone()
+    item["vendedor_nombre"] = (v["nombre_usuario"] or v["email"].split("@")[0]) if v else "Vendedor"
+    
+    cursor.close()
     return item
 
 @router.post("", response_model=ItemResponse)
@@ -103,16 +116,16 @@ def crear(datos: ItemCreate, conn = Depends(get_db_connection), user_id: str = D
     # automáticamente en base a las claves del diccionario que nos llega del frontend.
     columnas = ", ".join(item.keys())
     valores = ", ".join(["%s"] * len(item))
-    sql = f"INSERT INTO articulos ({columnas}) VALUES ({valores}) RETURNING *"
+    query = f"INSERT INTO articulos ({columnas}) VALUES ({valores}) RETURNING *"
     
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql, list(item.values()))
-            nuevo = cur.fetchone()
-            # NOTA PRESENTACIÓN: Hacer commit es fundamental para confirmar la transacción.
-            # Si no, se queda en el limbo y no se guarda en disco.
-            conn.commit()
-            return {**nuevo, "fotos": []}
+        cursor = conn.cursor()
+        cursor.execute(query, list(item.values()))
+        nuevo = cursor.fetchone()
+        # NOTA PRESENTACIÓN: Hacer commit es fundamental para confirmar la transacción.
+        conn.commit()
+        cursor.close()
+        return {**nuevo, "fotos": []}
     except Exception as e:
         conn.rollback()
         raise HTTPException(500, "Fallo al guardar en la base de datos")
@@ -122,23 +135,26 @@ async def editar(id: int, datos: ItemUpdate, conn = Depends(get_db_connection), 
     """Cambia datos de un producto tuyo."""
     await soy_el_dueño(id, user_id, conn)
     
-    # Solo lo que haya cambiado
     dict_datos = datos.model_dump(exclude_unset=True)
     if not dict_datos: raise HTTPException(400, "Nada que cambiar")
 
     sets = ", ".join([f"{c} = %s" for c in dict_datos.keys()])
-    sql = f"UPDATE articulos SET {sets} WHERE id_articulo = %s RETURNING *"
+    query = f"UPDATE articulos SET {sets} WHERE id_articulo = %s RETURNING *"
     params = list(dict_datos.values()) + [id]
     
     try:
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            editado = cur.fetchone()
-            # Fotos para que no se pierdan en el frontend
-            cur.execute("SELECT * FROM fotos_articulo WHERE id_articulo = %s", (id,))
-            editado["fotos"] = cur.fetchall()
-            conn.commit()
-            return editado
+        cursor = conn.cursor()
+        cursor.execute(query, params)
+        editado = cursor.fetchone()
+        
+        # Fotos para que no se pierdan en el frontend
+        query_fotos = "SELECT * FROM fotos_articulo WHERE id_articulo = %s"
+        cursor.execute(query_fotos, (id,))
+        editado["fotos"] = cursor.fetchall()
+        
+        conn.commit()
+        cursor.close()
+        return editado
     except Exception as e:
         conn.rollback()
         raise HTTPException(500, "Fallo al actualizar")
@@ -148,9 +164,11 @@ async def borrar(id: int, conn = Depends(get_db_connection), user_id: str = Depe
     """Elimina el producto para siempre."""
     await soy_el_dueño(id, user_id, conn)
     try:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM articulos WHERE id_articulo = %s", (id,))
-            conn.commit()
+        cursor = conn.cursor()
+        query = "DELETE FROM articulos WHERE id_articulo = %s"
+        cursor.execute(query, (id,))
+        conn.commit()
+        cursor.close()
         return {"message": "Borrado OK"}
     except Exception:
         conn.rollback()
@@ -165,9 +183,12 @@ async def subir_foto(id: int, file: UploadFile = File(...), admin_db = Depends(g
         admin_db.storage.from_("articulos-imagenes").upload(nombre, await file.read())
         url = admin_db.storage.from_("articulos-imagenes").get_public_url(nombre)
         
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO fotos_articulo (id_articulo, image_url) VALUES (%s, %s)", (id, url))
-            conn.commit()
+        cursor = conn.cursor()
+        query = "INSERT INTO fotos_articulo (id_articulo, image_url) VALUES (%s, %s)"
+        cursor.execute(query, (id, url))
+        conn.commit()
+        cursor.close()
+        
         return {"image_url": url}
     except Exception:
         conn.rollback()

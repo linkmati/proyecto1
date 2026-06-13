@@ -32,19 +32,18 @@ def get_admin_user(
     """
     user_id = get_current_user(token, db)
     
-    # Miramos en la tabla de usuarios qué rol tiene con SQL empotrado
-    with conn.cursor() as cur:
-        cur.execute("SELECT rol FROM usuarios WHERE id_usuario = %s", (user_id,))
-        row = cur.fetchone()
+    cursor = conn.cursor()
+    query = "SELECT rol FROM usuarios WHERE id_usuario = %s"
+    cursor.execute(query, (user_id,))
+    row = cursor.fetchone()
+    cursor.close()
     
     if not row:
-        print(f"DEBUG - get_admin_user: No profile found for user_id {user_id}")
         raise HTTPException(status_code=403, detail="Admin privileges required: Profile not found")
         
     role = row.get("rol")
     if role != "admin":
         # Si no eres admin, pues no te dejamos pasar
-        print(f"DEBUG - get_admin_user: User {user_id} has role '{role}', not 'admin'")
         raise HTTPException(status_code=403, detail="Admin privileges required")
         
     return user_id
