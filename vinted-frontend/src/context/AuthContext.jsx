@@ -1,9 +1,7 @@
 import { createContext, useContext, useMemo, useState, useEffect } from 'react'
 import api from '../api/client'
 
-// NOTA PRESENTACIÓN: Usamos el Context API de React para manejar el estado global.
-// Esto nos permite acceder a los datos del usuario (token, nombre, si está logueado)
-// desde cualquier componente de la aplicación, sin tener que ir pasando 'props' de un componente a otro.
+// NOTA PRESENTACIÓN: [STATE_MANAGEMENT] Context API de React para propagar sesión y datos del usuario globalmente.
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
@@ -13,8 +11,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(JSON.parse(localStorage.getItem('userData') || 'null'))
 
   const login = async (email, password) => {
-    // NOTA PRESENTACIÓN: FastAPI requiere que los datos del login vayan como un formulario tradicional 
-    // (x-www-form-urlencoded) en lugar de un JSON normal, por eso usamos URLSearchParams.
+    // NOTA PRESENTACIÓN: [FASTAPI_LOGIN_OAUTH2] FastAPI requiere formato URLSearchParams (x-www-form-urlencoded) para autenticación OAuth2.
     const form = new URLSearchParams()
     form.append('username', email)
     form.append('password', password)

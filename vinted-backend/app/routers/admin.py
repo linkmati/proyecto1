@@ -16,7 +16,7 @@ def get_items(conn = Depends(get_db_connection), admin_id: str = Depends(get_adm
     """
     params = []
     if search:
-        query += " WHERE a.titulo ILIKE %s"
+        query += " WHERE LOWER(a.titulo) LIKE LOWER(%s)"
         params.append(f"%{search}%")
     query += " ORDER BY a.created_at DESC"
     

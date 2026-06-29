@@ -76,18 +76,33 @@ async def crear_oferta(datos: OfferCreate, conn = Depends(get_db_connection), us
         # 2. Guardar oferta
         query_oferta = """
             INSERT INTO ofertas (importe, id_articulo, id_comprador, ultimo_emisor_id, estado, mensaje)
-            VALUES (%s, %s, %s, %s, 'pendiente', %s) RETURNING *
+            VALUES (%s, %s, %s, %s, 'pendiente', %s)
         """
         cursor.execute(query_oferta, (datos.importe, datos.id_articulo, user_id, user_id, datos.mensaje))
+        
+        # En MySQL usaríamos cursor.lastrowid.
+        # En PostgreSQL (psycopg2) hacemos un SELECT lastval() para obtener el último ID generado.
+        cursor.execute("SELECT lastval()")
+        last_id = cursor.fetchone()["lastval"]
+        
+        # Obtenemos la fila recién creada de forma estándar (compatible con MySQL y PostgreSQL)
+        cursor.execute("SELECT * FROM ofertas WHERE id_oferta = %s", (last_id,))
         nueva = cursor.fetchone()
         
         # 3. Chat (muy manual)
         u1, u2 = sorted([user_id, str(art["id_vendedor"])])
-        query_conv = """
-            INSERT INTO conversaciones (id_usuario_1, id_usuario_2, id_articulo)
-            VALUES (%s, %s, %s) ON CONFLICT DO NOTHING
-        """
-        cursor.execute(query_conv, (u1, u2, datos.id_articulo))
+        
+        # Primero miramos si existe la conversación para evitar duplicados sin usar ON CONFLICT
+        cursor.execute(
+            "SELECT 1 FROM conversaciones WHERE id_usuario_1 = %s AND id_usuario_2 = %s AND id_articulo = %s",
+            (u1, u2, datos.id_articulo)
+        )
+        if not cursor.fetchone():
+            query_conv = """
+                INSERT INTO conversaciones (id_usuario_1, id_usuario_2, id_articulo)
+                VALUES (%s, %s, %s)
+            """
+            cursor.execute(query_conv, (u1, u2, datos.id_articulo))
         
         query_cid = "SELECT id_conversacion FROM conversaciones WHERE id_usuario_1=%s AND id_usuario_2=%s AND id_articulo=%s"
         cursor.execute(query_cid, (u1, u2, datos.id_articulo))

@@ -41,15 +41,20 @@ def add_to_favorites(
 ):
     try:
         cursor = conn.cursor()
-        query = """
-            INSERT INTO favoritos (id_usuario, id_articulo) 
-            VALUES (%s, %s)
-            ON CONFLICT (id_usuario, id_articulo) DO NOTHING
-        """
-        cursor.execute(query, (user_id, item_id))
-        conn.commit()
+        # Primero miramos si ya está en favoritos para evitar duplicados sin usar ON CONFLICT
+        cursor.execute(
+            "SELECT 1 FROM favoritos WHERE id_usuario = %s AND id_articulo = %s", 
+            (user_id, item_id)
+        )
+        if not cursor.fetchone():
+            query = """
+                INSERT INTO favoritos (id_usuario, id_articulo) 
+                VALUES (%s, %s)
+            """
+            cursor.execute(query, (user_id, item_id))
+            conn.commit()
+            
         cursor.close()
-        
         return {"status": "success", "message": "Artículo añadido a favoritos"}
         
     except Exception as e:

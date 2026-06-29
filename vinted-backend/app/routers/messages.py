@@ -103,3 +103,73 @@ async def leer(id: int, conn = Depends(get_db_connection), user_id: str = Depend
     conn.commit()
     cursor.close()
     return {"status": "ok"}
+
+# --- NUEVOS ENDPOINTS PARA MENSAJERÍA ---
+
+from pydantic import BaseModel
+
+class MessageCreate(BaseModel):
+    id_destinatario: str
+    id_articulo: int
+    contenido: str
+
+@router.get("/unread-count")
+def contar_no_leidos(conn = Depends(get_db_connection), user_id: str = Depends(get_current_user)):
+    """Cuenta el número total de mensajes sin leer del usuario."""
+    cursor = conn.cursor()
+    query = """
+        SELECT COUNT(*) as n FROM mensajes m
+        JOIN conversaciones c ON m.id_conversacion = c.id_conversacion
+        WHERE (c.id_usuario_1 = %s OR c.id_usuario_2 = %s)
+          AND m.id_emisor != %s
+          AND m.leido = False
+    """
+    cursor.execute(query, (user_id, user_id, user_id))
+    fila = cursor.fetchone()
+    cursor.close()
+    return {"count": fila["n"] if fila else 0}
+
+@router.post("")
+def enviar_mensaje(datos: MessageCreate, conn = Depends(get_db_connection), user_id: str = Depends(get_current_user)):
+    """Envía un mensaje e inicia/recupera la conversación."""
+    cursor = conn.cursor()
+    try:
+        # Ordenamos los usuarios para mantener unicidad en id_usuario_1 < id_usuario_2
+        u1, u2 = sorted([user_id, datos.id_destinatario])
+        
+        # Comprobar si existe la conversación
+        cursor.execute(
+            "SELECT id_conversacion FROM conversaciones WHERE id_usuario_1 = %s AND id_usuario_2 = %s AND id_articulo = %s",
+            (u1, u2, datos.id_articulo)
+        )
+        fila_conv = cursor.fetchone()
+        if not fila_conv:
+            cursor.execute(
+                "INSERT INTO conversaciones (id_usuario_1, id_usuario_2, id_articulo) VALUES (%s, %s, %s)",
+                (u1, u2, datos.id_articulo)
+            )
+            cursor.execute("SELECT lastval()")
+            cid = cursor.fetchone()["lastval"]
+        else:
+            cid = fila_conv["id_conversacion"]
+            
+        # Insertar mensaje
+        cursor.execute(
+            "INSERT INTO mensajes (id_conversacion, id_emisor, contenido) VALUES (%s, %s, %s)",
+            (cid, user_id, datos.contenido)
+        )
+        
+        # Obtener el mensaje creado para responder
+        cursor.execute("SELECT lastval()")
+        mid = cursor.fetchone()["lastval"]
+        cursor.execute("SELECT * FROM mensajes WHERE id_mensaje = %s", (mid,))
+        nuevo_msj = cursor.fetchone()
+        
+        conn.commit()
+        cursor.close()
+        return nuevo_msj
+    except Exception as e:
+        conn.rollback()
+        cursor.close()
+        raise HTTPException(500, "Error al enviar el mensaje")
+

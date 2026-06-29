@@ -3,10 +3,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.supabase import get_db_connection
 from app.routers import items, auth, offers, users, messages, favorites, admin
 
-# NOTA PRESENTACIÓN: Inicializamos la app con FastAPI. 
+# NOTA PRESENTACIÓN: [API_INIT] Inicialización principal del framework FastAPI.
 app = FastAPI(title="Vinted Clone API")
 
-# NOTA PRESENTACIÓN: CORS (Cross-Origin Resource Sharing).
+# NOTA PRESENTACIÓN: [CORS_POLICY] Middleware para habilitar CORS y permitir llamadas desde el frontend.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +16,7 @@ app.add_middleware(
     expose_headers=["*"]
 )
 
-# NOTA PRESENTACIÓN: Separamos el código en "Routers" para que main.py no sea gigante.
+# NOTA PRESENTACIÓN: [MODULAR_ROUTING] Inclusión de submódulos de rutas para desacoplar controladores.
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(items.router)

@@ -11,9 +11,7 @@ router = APIRouter(prefix="/api/items", tags=["Items"])
 
 async def buscar_producto(id: int, conn):
     """Busca un producto. Si no está, falla."""
-    # NOTA PRESENTACIÓN: Siempre pasamos las variables como tupla `(id,)` 
-    # en lugar de concatenar cadenas tipo f"SELECT ... {id}".
-    # Esto previene ataques de Inyección SQL.
+    # NOTA PRESENTACIÓN: [SQL_INJECTION_PREVENTION] Uso de parámetros en tupla para evitar vulnerabilidades de Inyección SQL.
     cursor = conn.cursor()
     query = "SELECT * FROM articulos WHERE id_articulo = %s"
     cursor.execute(query, (id,))
@@ -45,7 +43,7 @@ def ver_todo(
     query = "SELECT * FROM articulos WHERE estado_articulo = 'disponible'"
     parametros = []
     
-    # NOTA PRESENTACIÓN: Montamos la consulta dinámicamente según lo que pida el usuario
+    # NOTA PRESENTACIÓN: [DYNAMIC_FILTERING] Construcción dinámica de consulta SQL según parámetros recibidos.
     if categoria and categoria != "Todas":
         query += " AND categoria = %s"
         parametros.append(categoria)
@@ -112,17 +110,25 @@ def crear(datos: ItemCreate, conn = Depends(get_db_connection), user_id: str = D
     item = datos.model_dump()
     item["id_vendedor"] = user_id 
     
-    # NOTA PRESENTACIÓN: Montamos el INSERT generando los nombres de las columnas y los %s
-    # automáticamente en base a las claves del diccionario que nos llega del frontend.
+    # NOTA PRESENTACIÓN: [META_SQL_INSERT] Mapeo dinámico de llaves del diccionario a columnas y marcadores SQL.
     columnas = ", ".join(item.keys())
     valores = ", ".join(["%s"] * len(item))
-    query = f"INSERT INTO articulos ({columnas}) VALUES ({valores}) RETURNING *"
+    query = f"INSERT INTO articulos ({columnas}) VALUES ({valores})"
     
     try:
         cursor = conn.cursor()
         cursor.execute(query, list(item.values()))
+        
+        # En MySQL usaríamos cursor.lastrowid.
+        # En PostgreSQL (psycopg2) hacemos un SELECT lastval() para obtener el último ID generado.
+        cursor.execute("SELECT lastval()")
+        last_id = cursor.fetchone()["lastval"]
+        
+        # Obtenemos la fila recién creada de forma estándar (compatible con MySQL y PostgreSQL)
+        cursor.execute("SELECT * FROM articulos WHERE id_articulo = %s", (last_id,))
         nuevo = cursor.fetchone()
-        # NOTA PRESENTACIÓN: Hacer commit es fundamental para confirmar la transacción.
+        
+        # NOTA PRESENTACIÓN: [DB_COMMIT] Confirmación física de los cambios en la base de datos.
         conn.commit()
         cursor.close()
         return {**nuevo, "fotos": []}
@@ -139,12 +145,15 @@ async def editar(id: int, datos: ItemUpdate, conn = Depends(get_db_connection), 
     if not dict_datos: raise HTTPException(400, "Nada que cambiar")
 
     sets = ", ".join([f"{c} = %s" for c in dict_datos.keys()])
-    query = f"UPDATE articulos SET {sets} WHERE id_articulo = %s RETURNING *"
+    query = f"UPDATE articulos SET {sets} WHERE id_articulo = %s"
     params = list(dict_datos.values()) + [id]
     
     try:
         cursor = conn.cursor()
         cursor.execute(query, params)
+        
+        # Obtenemos la fila actualizada de forma estándar (compatible con MySQL y PostgreSQL)
+        cursor.execute("SELECT * FROM articulos WHERE id_articulo = %s", (id,))
         editado = cursor.fetchone()
         
         # Fotos para que no se pierdan en el frontend
